@@ -91,9 +91,11 @@ Pattern: `services/memory/providers/` — same factory approach as channels.
 - Tables: `chunks` (id, path, content, start_line, end_line, embedding as JSON, metadata as JSON) + `files` (path, mtime, size, indexed_at)
 - No pgvector — no vector search in sqlite. Falls back to in-memory cosine similarity.
 
-### Postgres (`providers/psql.ts`) — future
-- Will use `pgvector` for efficient ANN search via `searchSimilar`
-- Configured via `config.storage.type: "postgres"` + `config.storage.url`
+### Postgres (`providers/psql.ts`)
+- `pg` (node-postgres) + `pgvector` — real `searchSimilar` via cosine `<=>` (HNSW index)
+- Tables: `memory_chunks` (embedding as `vector`, metadata as `jsonb`) + `memory_files` — table prefix configurable
+- Config: `config.storage.type: "postgres"` + `config.storage.url`. Missing url falls back to sqlite with a warning.
+- `searchSimilar` clamps scores to [0,1] to absorb fp jitter. Dimensionless vector columns tolerate mixed dimensions, so after an embedding-model swap the next search degrades to text-only (warn logged) until the old-dim chunks are overwritten by re-sync/reindex.
 
 ## Tool Surface
 
