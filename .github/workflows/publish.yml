@@ -47,7 +47,7 @@ jobs:
 
             **Changes:** Published from main branch
 
-            [View on npm](https://www.npmjs.com/package/@chozzz/vargos/v/${{ env.VERSION }})
+            [View on npm](https://www.npmjs.com/package/@vargos-labs/vargos/v/${{ env.VERSION }})
           draft: false
           prerelease: false
         env:

@@ -1,4 +1,4 @@
-# The repo is a single pnpm workspace: the root package (@chozzz/vargos, the
+# The repo is a single pnpm workspace: the root package (@vargos-labs/vargos, the
 # daemon + CLI that gets published) plus the private web console in ./web.
 # One `pnpm install` at the root installs and links everything.
 packages:

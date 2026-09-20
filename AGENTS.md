@@ -16,8 +16,8 @@ pnpm run test:run     # single test run
 pnpm lint             # eslint + typecheck
 ```
 
-The repo is one pnpm workspace: the published root package (`@chozzz/vargos`) plus the
-private `web/` console (`@chozzz/vargos-web`). The **`edge/web` service** brings the console
+The repo is one pnpm workspace: the published root package (`@vargos-labs/vargos`) plus the
+private `web/` console (`@vargos-labs/vargos-web`). The **`edge/web` service** brings the console
 up as part of the daemon — `vargos start` / `npx` / systemd all serve it:
 
 - Next server (HTTP + `/api/*`) — a child process on `WEB_PORT` (9003). Dev: `next dev`.
@@ -78,7 +78,7 @@ PRs go from a feature branch into `dev`. The maintainer merges `dev` → `main` 
 3. **Update CHANGELOG.md** — Add a new section for the version with:
    - Version number and date (e.g., `## [2.0.14] - 2026-05-16`)
    - Categories: Added, Changed, Fixed, Removed, Security
-   - Link to GitHub release at bottom: `[2.0.14]: https://github.com/chozzz/vargos/releases/tag/v2.0.14`
+   - Link to GitHub release at bottom: `[2.0.14]: https://github.com/vargos-labs/vargos/releases/tag/v2.0.14`
 
 4. **Commit and push to main**
    ```bash
@@ -89,13 +89,13 @@ PRs go from a feature branch into `dev`. The maintainer merges `dev` → `main` 
 
 5. **GitHub Actions publishes automatically**
    - Workflow: `.github/workflows/publish.yml`
-   - Publishes to npm as `@chozzz/vargos`
+   - Publishes to npm as `@vargos-labs/vargos`
    - Creates GitHub Release with tag `vX.Y.Z`
 
 6. **Users get the new version**
    ```bash
-   npx @chozzz/vargos              # Latest, one-shot
-   npm install -g @chozzz/vargos   # Global install
+   npx @vargos-labs/vargos              # Latest, one-shot
+   npm install -g @vargos-labs/vargos   # Global install
    ```
 
 **Note:** External contributors should NOT push directly to `main`. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the PR workflow.

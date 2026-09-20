@@ -66,7 +66,7 @@ an edge service that fails to load is a warning, not fatal.
   `vargos start` / `npx` / systemd all serve it), spawns the Next UI as a child on
   `WEB_PORT` (9003) and runs the live-update WebSocket in-process on `VARGOS_WEB_WS_PORT`
   (9004) — the WS reads gateway state straight off the bus. Source lives in
-  [`web/`](../web/) (`@chozzz/vargos-web`, private); `pnpm build` compiles it to a Next
+  [`web/`](../web/) (`@vargos-labs/vargos-web`, private); `pnpm build` compiles it to a Next
   standalone bundle staged into `dist/web/`. Degrades to filesystem-only when the gateway
   is still starting.
 

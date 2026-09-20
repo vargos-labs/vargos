@@ -5,11 +5,11 @@ Live web console for a running [Vargos](../AGENTS.md) agent OS. Everything on th
 running gateway via JSON-RPC over TCP, and streams changes to the browser over WebSocket.
 
 The console **is part of the daemon** — the [`edge/web`](../edge/web/) service. `vargos
-start`, `npx @chozzz/vargos` and systemd all bring it up; there is no separate command.
+start`, `npx @vargos-labs/vargos` and systemd all bring it up; there is no separate command.
 `edge/web` spawns the Next server as a supervised child (**`next dev`** from a clone,
 the **standalone bundle** in `dist/web/` in production) and runs the live-update
 WebSocket in the daemon process. The `web/` source is a private workspace member
-(`@chozzz/vargos-web`) that imports shared logic from the daemon (`@vargos/lib/*`)
+(`@vargos-labs/vargos-web`) that imports shared logic from the daemon (`@vargos/lib/*`)
 instead of copying it.
 
 ## Ports
@@ -80,7 +80,7 @@ Next standalone bundle in `dist/web/`, which `edge/web` runs in production. Open
 **http://localhost:9003**; the sidebar shows a **live** badge once the WebSocket connects.
 While the gateway is still starting, pages render from the filesystem and mark it offline.
 
-Iterating on just the UI (no daemon): `pnpm --filter @chozzz/vargos-web dev`, then point it
+Iterating on just the UI (no daemon): `pnpm --filter @vargos-labs/vargos-web dev`, then point it
 at a running gateway with `VARGOS_GATEWAY_PORT` / `VARGOS_DATA_DIR`.
 
 ## Layout

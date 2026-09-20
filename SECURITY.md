@@ -9,7 +9,7 @@ Only the latest release receives security updates.
 Vargos handles API keys, auth tokens, and personal data. If you discover a security issue, please report it responsibly:
 
 1. **Do not** open a public issue.
-2. Use [GitHub Security Advisories](https://github.com/chozzz/vargos/security/advisories/new) to file a private report.
+2. Use [GitHub Security Advisories](https://github.com/vargos-labs/vargos/security/advisories/new) to file a private report.
 3. Include steps to reproduce if possible.
 4. We will respond within 48 hours.
 

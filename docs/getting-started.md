@@ -13,7 +13,7 @@ reports (without prompting) on `vargos start` and `vargos chat`, and you can rev
 ## Install
 
 ```bash
-git clone https://github.com/chozzz/vargos.git
+git clone https://github.com/vargos-labs/vargos.git
 cd vargos
 pnpm install
 ```
@@ -21,7 +21,7 @@ pnpm install
 ## First run
 
 ```bash
-npx @chozzz/vargos        # bare invocation runs the guided journey
+npx @vargos-labs/vargos        # bare invocation runs the guided journey
 # or, from a clone:
 pnpm run setup            # the same one command
 ```

@@ -2,10 +2,10 @@
  * Web console edge service — `edge-web`.
  *
  * Brings the browser UI up as part of the daemon: `vargos start`, `npx
- * @chozzz/vargos`, and systemd all get it, no separate process to launch.
+ * @vargos-labs/vargos`, and systemd all get it, no separate process to launch.
  *
  *   • Next server (HTTP + `/api/*`) — a child process on WEB_PORT (default 9003).
- *     Dev: `pnpm --filter @chozzz/vargos-web dev`. Prod: the standalone bundle
+ *     Dev: `pnpm --filter @vargos-labs/vargos-web dev`. Prod: the standalone bundle
  *     staged into `dist/web/` by the root build.
  *   • Live-update WebSocket — in-process on VARGOS_WEB_WS_PORT (default 9004).
  *     Runs here (not in Next) so it reads gateway state straight off the bus and
@@ -124,7 +124,7 @@ export class WebEdge implements Service {
     }
 
     this.child = isDev
-      ? spawn('pnpm', ['--filter', '@chozzz/vargos-web', 'dev'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] })
+      ? spawn('pnpm', ['--filter', '@vargos-labs/vargos-web', 'dev'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] })
       : spawn(process.execPath, [server], { cwd: path.dirname(server), env, stdio: ['ignore', 'pipe', 'pipe'] });
 
     const tag = (line: string) => line.split('\n').filter(Boolean).forEach(l => log.info(`[next] ${l}`));

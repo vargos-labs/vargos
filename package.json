@@ -1,5 +1,5 @@
 {
-  "name": "@chozzz/vargos",
+  "name": "@vargos-labs/vargos",
   "version": "3.2.20",
   "packageManager": "pnpm@10.33.2",
   "description": "Self-hosted agent OS with persistent memory, multi-channel presence, tools, scheduling, and sub-agent orchestration",
@@ -7,10 +7,10 @@
   "author": "Vadi Taslim",
   "repository": {
     "type": "git",
-    "url": "https://github.com/chozzz/vargos.git"
+    "url": "https://github.com/vargos-labs/vargos.git"
   },
-  "homepage": "https://github.com/chozzz/vargos",
-  "bugs": "https://github.com/chozzz/vargos/issues",
+  "homepage": "https://github.com/vargos-labs/vargos",
+  "bugs": "https://github.com/vargos-labs/vargos/issues",
   "keywords": [
     "mcp",
     "agent",
@@ -41,7 +41,7 @@
     "seed": "tsx scripts/seed.ts",
     "cli": "tsx cli.ts",
     "chat": "tsx scripts/seed.ts && PI_CODING_AGENT_DIR=\"${VARGOS_DATA_DIR:-$HOME/.vargos}/agent\" pi --session-dir \"${VARGOS_DATA_DIR:-$HOME/.vargos}/sessions/cli\"",
-    "build": "rm -rf dist && tsc && cp -r .templates dist/.templates && chmod +x dist/cli.js && pnpm --filter @chozzz/vargos-web build && cp -r web/.next/standalone dist/web && rm -rf dist/web/node_modules dist/web/web/node_modules dist/web/package.json",
+    "build": "rm -rf dist && tsc && cp -r .templates dist/.templates && chmod +x dist/cli.js && pnpm --filter @vargos-labs/vargos-web build && cp -r web/.next/standalone dist/web && rm -rf dist/web/node_modules dist/web/web/node_modules dist/web/package.json",
     "prepare": "husky && pnpm run build",
     "test": "vitest",
     "test:run": "vitest run",

@@ -183,7 +183,7 @@ Pi-SDK-powered runtime (`@earendil-works/pi-coding-agent`) with Vargos-managed c
 
 ## Web Console
 
-The `edge/web` service — starts with the daemon (`vargos start` / `npx` / systemd). Next child on `:9003` (HTTP + `/api/*`); live-update WebSocket in the daemon process on `:9004`. Source in `web/` (`@chozzz/vargos-web`, private); `pnpm build` stages a Next standalone bundle into `dist/web/`.
+The `edge/web` service — starts with the daemon (`vargos start` / `npx` / systemd). Next child on `:9003` (HTTP + `/api/*`); live-update WebSocket in the daemon process on `:9004`. Source in `web/` (`@vargos-labs/vargos-web`, private); `pnpm build` stages a Next standalone bundle into `dist/web/`.
 
 | Feature | Status |
 |---------|--------|

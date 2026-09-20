@@ -1,5 +1,5 @@
 {
-  "name": "@chozzz/vargos-web",
+  "name": "@vargos-labs/vargos-web",
   "version": "0.1.0",
   "private": true,
   "description": "Live web console for a running Vargos agent OS.",
