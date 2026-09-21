@@ -18,17 +18,17 @@
 
 ```bash
 # npx (no install)
-npx @chozzz/vargos
+npx @vargos-labs/vargos
 
 # or clone + run
-git clone https://github.com/chozzz/vargos.git
+git clone https://github.com/vargos-labs/vargos.git
 cd vargos
 pnpm install
 pnpm run setup        # guided first run
 pnpm start            # boot the daemon + web console
 ```
 
-First run — `npx @chozzz/vargos` (bare), `vargos setup`, or `pnpm run setup` from a clone —
+First run — `npx @vargos-labs/vargos` (bare), `vargos setup`, or `pnpm run setup` from a clone —
 walks one guided journey: seed, migrate, pick a provider + model, enter the key, check
 prerequisites. It doesn't finish until the agent can run. One Q&A writes every config file;
 a `${PROVIDER}_API_KEY` in the environment is used automatically.
@@ -104,7 +104,7 @@ pnpm lint             # ESLint + typecheck
 pnpm build            # Compile → dist/ + build the web console into dist/web/
 ```
 
-The **web console** comes up with the daemon — `vargos start`, `npx @chozzz/vargos`, and
+The **web console** comes up with the daemon — `vargos start`, `npx @vargos-labs/vargos`, and
 systemd all serve it. It's the `edge/web` service: a Next child on **:9003** (HTTP + `/api/*`)
 plus a live-update WebSocket on **:9004** that runs inside the daemon. A live read/observe UI
 over sessions, channels, cron, models, MCP, agents and memory, with a few write actions

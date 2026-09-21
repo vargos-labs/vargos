@@ -5,6 +5,7 @@ import type { AppConfig } from '../config/index.js';
 import { getDataPaths } from '../../lib/paths.js';
 import { MemoryContext } from './context.js';
 import { MemorySQLiteStorage } from './providers/sqlite.js';
+import { MemoryPostgresStorage } from './providers/psql.js';
 import { createLogger } from '../../lib/logger.js';
 import type { MemoryStorage } from './types.js';
 
@@ -14,14 +15,18 @@ export class MemoryService implements Service {
   protected readonly log = createLogger('memory');
   protected context!: MemoryContext;
 
-  private createStorage(dataDir: string, storageType?: string): MemoryStorage {
-    const type = storageType ?? 'sqlite';
+  private createStorage(dataDir: string, storage?: { type?: string; url?: string }): MemoryStorage {
+    const type = storage?.type ?? 'sqlite';
     switch (type) {
       case 'sqlite':
         return new MemorySQLiteStorage(path.join(dataDir, 'memory.db'));
-      case 'postgres':
-        this.log.warn('Postgres storage not yet implemented — falling back to sqlite');
-        return new MemorySQLiteStorage(path.join(dataDir, 'memory.db'));
+      case 'postgres': {
+        if (!storage?.url) {
+          this.log.warn('storage.type is postgres but storage.url is missing — falling back to sqlite');
+          return new MemorySQLiteStorage(path.join(dataDir, 'memory.db'));
+        }
+        return new MemoryPostgresStorage(storage.url);
+      }
       default:
         throw new Error(`Unknown storage type: ${type}`);
     }
@@ -32,7 +37,7 @@ export class MemoryService implements Service {
 
     const config = await bus.call<AppConfig>('config.get', {});
     const { workspaceDir, cacheDir, sessionsDir, dataDir } = getDataPaths();
-    const storage = this.createStorage(dataDir, config.storage?.type);
+    const storage = this.createStorage(dataDir, config.storage);
 
     // Extract embedding-related configs with proper type checking
     let embeddingProvider: 'openai' | 'local' | 'none' = 'none';

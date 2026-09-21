@@ -10,7 +10,7 @@ Before opening a PR, start with an issue:
 - **Feature requests** — describe the use case, not just the solution
 - **Questions** — anything unclear about the project
 
-[Open an issue](https://github.com/chozzz/vargos/issues)
+[Open an issue](https://github.com/vargos-labs/vargos/issues)
 
 ## Branch Workflow
 
