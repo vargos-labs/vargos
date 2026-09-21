@@ -1,6 +1,6 @@
 {
   "name": "@vargos-labs/vargos",
-  "version": "3.2.20",
+  "version": "3.2.21",
   "packageManager": "pnpm@10.33.2",
   "description": "Self-hosted agent OS with persistent memory, multi-channel presence, tools, scheduling, and sub-agent orchestration",
   "license": "MIT",

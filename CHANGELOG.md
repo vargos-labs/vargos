@@ -2,6 +2,11 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.2.21] - 2026-09-21
+
+### Changed
+- Moved the repository to the [vargos-labs](https://github.com/vargos-labs/vargos) organization and renamed the npm package to `@vargos-labs/vargos` (first release under the new name). Install with `npm install -g @vargos-labs/vargos` or `npx @vargos-labs/vargos`. The old `@chozzz/vargos` package is deprecated and will not receive further updates.
+
 ## [3.2.18] - 2026-09-11
 
 ### Fixed
