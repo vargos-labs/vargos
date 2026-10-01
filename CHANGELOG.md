@@ -2,7 +2,7 @@
 
 All notable changes to Vargos will be documented in this file.
 
-## [3.3.0] - 2026-10-01
+## [3.4.0] - 2026-10-01
 
 ### Added
 - **Bundled engineering skill library** — 37 generic workflow skills now ship in `.templates/agent/skills/` and seed into `~/.vargos/agent/skills/` on first boot: the `using-agent-skills` router, the phase skills (`spec-driven-development`, `planning-and-task-breakdown`, `incremental-implementation`, `test-driven-development`, `systematic-debugging`, `code-review-and-quality`, `shipping-and-launch`, …), contextual skills (`api-and-interface-design`, `security-and-hardening`, `performance-optimization`, `context-engineering`, `documentation-and-adrs`, `git-workflow-and-versioning`), and Next.js/React pattern packs plus `mcp-builder`.
@@ -21,7 +21,7 @@ All notable changes to Vargos will be documented in this file.
 - The retired bundled `distill-*` skills are deleted from existing installs by a one-time migration (`.migrations/001-remove-legacy-skills.ts`).
 - The `pi-mcp-adapter` lifecycle (`cli/mcp-adapter.ts`, and the "install the MCP adapter" prompts in first-run and `vargos config`) — superseded by Pi's `builtin:mcp`.
 
-[3.3.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.3.0
+[3.4.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.0
 
 ## [3.2.21] - 2026-09-21
 
