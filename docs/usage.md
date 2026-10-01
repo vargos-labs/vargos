@@ -259,6 +259,8 @@ Vargos has two sides to MCP:
 
 External MCP servers are configured in `~/.vargos/agent/mcp.json` (shared with Pi SDK). This file is seeded with examples on first run.
 
+The file feeds both clients. The daemon registers every tool on the bus (see below); the interactive `vargos chat` uses Pi's built-in `builtin:mcp` (Pi 0.99+), which registers tools as `mcp__<server>__<tool>` and honors the `exposure` / `toolExposure` keys. The daemon ignores those two keys — it exposes all of a server's tools.
+
 At boot, [`services/mcp/`](../services/mcp/) spawns each server, lists its tools, and registers them on the bus namespaced as `mcp.<server>.<tool>`. The agent calls them like any other bus tool. Channel persona `allowedTools` globs apply (e.g. `mcp.atlassian.*`).
 
 If a server fails to start, the gateway logs a warning and continues — it won't block boot.

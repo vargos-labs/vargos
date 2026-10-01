@@ -1,7 +1,7 @@
 /**
  * `vargos config` — the post-install editor. Everything the first-run journey
- * skips or defers lives here: swap provider/model, add channels, enable MCP,
- * re-check the environment, force-run migrations.
+ * skips or defers lives here: swap provider/model, add channels, re-check the
+ * environment, force-run migrations.
  *
  * `vargos config show` (and `get`) still print the merged config as JSON — see
  * the passthrough in cli.ts.
@@ -9,7 +9,7 @@
 
 import * as p from '@clack/prompts';
 import { configureProvider } from './provider.js';
-import { addChannel, enableMcp } from './enrich.js';
+import { addChannel } from './enrich.js';
 import { runDoctors } from '../scripts/doctors/index.js';
 import { runMigrations } from '../lib/migrate.js';
 
@@ -22,7 +22,6 @@ export async function configMenu(): Promise<void> {
       options: [
         { value: 'provider', label: 'Change LLM provider / model' },
         { value: 'channel', label: 'Add a messaging channel' },
-        { value: 'mcp', label: 'Install the MCP adapter' },
         { value: 'doctor', label: 'Re-check the environment' },
         { value: 'migrate', label: 'Run pending migrations' },
         { value: 'exit', label: 'Done' },
@@ -37,9 +36,6 @@ export async function configMenu(): Promise<void> {
         break;
       case 'channel':
         await addChannel();
-        break;
-      case 'mcp':
-        await enableMcp();
         break;
       case 'doctor':
         await runDoctors();

@@ -34,7 +34,7 @@ pnpm run setup            # the same one command
    (`agent/models.json`, `agent/auth.json`, `agent/settings.json`); a `${PROVIDER}_API_KEY`
    in the environment is picked up automatically
 4. check external prerequisites for anything you configured (uv, Playwright browsers)
-5. optionally connect a channel or install the MCP adapter — always skippable
+5. optionally connect a messaging channel — always skippable
 
 Presets: Anthropic, OpenAI, Google, OpenRouter, Groq, DeepSeek, Ollama. Any other
 OpenAI-compatible endpoint works — add it later with `vargos config`.

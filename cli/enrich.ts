@@ -1,16 +1,10 @@
 /**
- * Optional setup — messaging channels and the MCP adapter. Never required to run
- * the agent, so this is offered at the end of first-run and from `vargos config`,
- * never as a gate.
+ * Optional setup — messaging channels. Never required to run the agent, so this is
+ * offered at the end of first-run and from `vargos config`, never as a gate.
  */
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
-import { getDataPaths } from '../lib/paths.js';
-import { readJson } from '../lib/util.js';
 import { registerChannel, pairWhatsApp } from './channels.js';
-import { ensureMcpAdapter, resolvePiCli, MCP_ADAPTER_SPEC } from './mcp-adapter.js';
 
 /** Add one Telegram or WhatsApp channel. */
 export async function addChannel(): Promise<void> {
@@ -63,31 +57,13 @@ export async function addChannel(): Promise<void> {
   }
 }
 
-/** Install/upgrade the pi MCP adapter so the agent can load MCP tools. */
-export async function enableMcp(): Promise<void> {
-  const { dataDir } = getDataPaths();
-  const agentDir = path.join(dataDir, 'agent');
-  const spin = p.spinner();
-  spin.start('Installing MCP adapter');
-  try {
-    const settings = readJson<{ packages?: string[] }>(path.join(agentDir, 'settings.json')) ?? {};
-    // resolvePiCli walks up from this file; in dev/dist it finds the workspace copy.
-    spin.stop(ensureMcpAdapter(agentDir, resolvePiCli(path.dirname(fileURLToPath(import.meta.url))), settings.packages ?? []));
-  } catch {
-    spin.stop(`Skipped — install later: pi install ${MCP_ADAPTER_SPEC}`);
-  }
-}
-
 /** First-run tail: offer the optional extras once, in sequence. */
 export async function offerEnrichment(): Promise<void> {
   p.note(
-    'Optional — talk to your agent from your phone, or give it MCP tools.\nSkip any of this and add it later with "vargos config".',
+    'Optional — talk to your agent from your phone.\nSkip this and add it later with "vargos config".',
     'Extras',
   );
 
   const wantChannel = await p.confirm({ message: 'Connect a messaging channel now?', initialValue: false });
   if (!p.isCancel(wantChannel) && wantChannel) await addChannel();
-
-  const wantMcp = await p.confirm({ message: 'Install the MCP adapter now?', initialValue: false });
-  if (!p.isCancel(wantMcp) && wantMcp) await enableMcp();
 }

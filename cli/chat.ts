@@ -1,6 +1,7 @@
 /**
  * `vargos chat` — launch the pi coding-agent CLI against the Vargos data dir.
- * Seeds templates, ensures the MCP adapter is installed, then hands off to pi.
+ * Seeds templates, then hands off to pi. MCP comes from Pi's built-in `builtin:mcp`
+ * extension, which reads the same `agent/mcp.json`.
  */
 
 import path from 'node:path';
@@ -8,10 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import { getDataPaths } from '../lib/paths.js';
 import { createLogger } from '../lib/logger.js';
-import { readJson } from '../lib/util.js';
 import { seedDataDir } from '../lib/templates.js';
 import { reportProblems } from '../scripts/doctors/index.js';
-import { ensureMcpAdapter, resolvePiCli } from './mcp-adapter.js';
+import { resolvePiCli } from './pi-cli.js';
 
 export async function chat(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,13 +21,6 @@ export async function chat(): Promise<void> {
   const dataDir = paths.dataDir;
   const agentDir = path.join(dataDir, 'agent');
   const piCliPath = resolvePiCli(here);
-
-  // Ensure the MCP adapter is installed to the Vargos agent directory *and* current —
-  // a stale copy (e.g. 2.x under a newer Pi) breaks /mcp and prints warnings on every start.
-  try {
-    const settings = readJson<{ packages?: string[] }>(path.join(agentDir, 'settings.json')) ?? {};
-    ensureMcpAdapter(agentDir, piCliPath, settings.packages ?? []);
-  } catch { /* chat still works without MCP */ }
 
   // pi treats an MCP server that fails to spawn as fatal, so name the missing
   // prerequisite here rather than letting the session die on a bare ENOENT.

@@ -9,8 +9,8 @@ All notable changes to Vargos will be documented in this file.
 - `pnpm npx:local` — pack the working tree and run the published bin exactly like `npx @vargos-labs/vargos` (respects the `files` allowlist, fresh dependency tree) for pre-release testing.
 
 ### Changed
-- **Pi SDK upgraded `0.82.1 → 0.99.2`** (with `pi-mcp-adapter` → 4.0.0). Brings built-in MCP support, the `codemode`/`tool_search` tools, and the `0.84` session-repository migration.
-- `vargos chat` now upgrades a *stale* `pi-mcp-adapter` install instead of only checking that it is listed. Vargos no longer declares `pi-mcp-adapter` as a runtime dependency — the interactive CLI installs its own copy into the agent directory.
+- **Pi SDK upgraded `0.82.1 → 0.99.2`.** Brings built-in MCP support, the `codemode`/`tool_search` tools, and the `0.84` session-repository migration.
+- **Dropped the third-party `pi-mcp-adapter`.** Pi 0.99 ships `builtin:mcp` — enabled by default, reading the same `agent/mcp.json` with the richer `exposure`/`toolExposure` model — so `vargos chat` no longer installs or needs an adapter. Migration `002-remove-mcp-adapter` removes it and translates `directTools` → `exposure` on existing installs.
 
 ### Fixed
 - **Media extraction no longer overflows the context window.** Document text and audio transcripts are bounded to `agent.media.maxExtractChars` (default 100 000 chars); over-budget text is persisted next to the source and only the head plus a `read`/`grep` pointer is injected, protecting low-context models from a compaction loop.
@@ -19,6 +19,7 @@ All notable changes to Vargos will be documented in this file.
 
 ### Removed
 - The retired bundled `distill-*` skills are deleted from existing installs by a one-time migration (`.migrations/001-remove-legacy-skills.ts`).
+- The `pi-mcp-adapter` lifecycle (`cli/mcp-adapter.ts`, and the "install the MCP adapter" prompts in first-run and `vargos config`) — superseded by Pi's `builtin:mcp`.
 
 [3.3.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.3.0
 

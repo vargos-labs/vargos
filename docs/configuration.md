@@ -57,9 +57,12 @@ To run Pi CLI against the same config: `pnpm chat` (sets `PI_CODING_AGENT_DIR` a
 
 ## MCP
 
-External MCP servers are configured in `~/.vargos/agent/mcp.json`, which is shared between Vargos (`pnpm start`) and Pi SDK CLI (`pnpm chat`). See [MCP documentation](./usage.md) for examples and setup.
+External MCP servers are configured in `~/.vargos/agent/mcp.json`, shared between the Vargos daemon (`vargos start`) and the interactive CLI (`vargos chat`). See [MCP documentation](./usage.md) for examples and setup.
 
-Tools are namespaced as `mcp.<server>.<tool>` on the bus when the Vargos server is running.
+Two clients read the same file with different surfaces:
+
+- **Daemon** — [`services/mcp/`](../services/mcp/) spawns each server and registers its tools on the bus as `mcp.<server>.<tool>`.
+- **`vargos chat`** — Pi's built-in `builtin:mcp` extension (Pi 0.99+) connects the same servers and registers tools as `mcp__<server>__<tool>`. Control how they reach the model with `exposure` (`direct` | `deferred` | `codemode` | `hidden`, default `codemode`) and per-tool `toolExposure`. No third-party adapter is installed or needed.
 
 The MCP **server** (Vargos exposing itself as an MCP server) lives in [`edge/mcp/`](../edge/mcp/) and is currently commented out in [`index.ts`](../index.ts).
 
