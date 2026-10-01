@@ -1,6 +1,10 @@
 ---
 name: test-driven-development
-description: Drives new or changed behavior with the red-green-refactor loop: failing test first, then the code that makes it pass, then refactor. Use when implementing logic, changing behavior, or proving that code works. For diagnosing an existing failure, use debugging-and-error-recovery.
+description: >-
+  Drives new or changed behavior with the red-green-refactor loop: failing test first, then
+  the code that makes it pass, then refactor. Use when implementing logic, changing behavior,
+  or proving that code works. For diagnosing an existing failure, use
+  debugging-and-error-recovery.
 ---
 
 # Test-Driven Development

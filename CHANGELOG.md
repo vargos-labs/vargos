@@ -16,6 +16,7 @@ All notable changes to Vargos will be documented in this file.
 - **Media extraction no longer overflows the context window.** Document text and audio transcripts are bounded to `agent.media.maxExtractChars` (default 100 000 chars); over-budget text is persisted next to the source and only the head plus a `read`/`grep` pointer is injected, protecting low-context models from a compaction loop.
 - Cron: per-task `model` overrides persist across reloads; model specs containing colons resolve correctly; portable `tsx` resolution.
 - Media: reject binary files in the document-extraction fallback.
+- Bundled skills `nextjs-anti-patterns` and `test-driven-development` shipped unquoted `description` values containing `: `, which is invalid YAML — Pi dropped them and reported a **skill conflict** in `vargos chat`. They now use folded block scalars, and a test validates the frontmatter of every bundled `SKILL.md`.
 
 ### Removed
 - The retired bundled `distill-*` skills are deleted from existing installs by a one-time migration (`.migrations/001-remove-legacy-skills.ts`).
