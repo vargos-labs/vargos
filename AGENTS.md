@@ -10,6 +10,7 @@ pnpm start            # boot gateway + all services + web console (edge/web)
 pnpm chat             # Pi SDK CLI bound to ~/.vargos/agent (interactive REPL)
 pnpm cli              # run the CLI entrypoint directly (tsx cli.ts)
 pnpm seed             # manual `seedDataDir()` — copy missing templates into ~/.vargos/
+pnpm npx:local -- …   # build+pack locally and run the packed tarball like `npx @vargos-labs/vargos`
 pnpm run typecheck    # tsc --noEmit (root; `web` is excluded — it has its own)
 pnpm run build        # tsc → dist/, then build+stage the web console into dist/web/
 pnpm run test:run     # single test run
@@ -28,6 +29,12 @@ up as part of the daemon — `vargos start` / `npx` / systemd all serve it:
 `web/`'s own source imports shared logic from the daemon (`@vargos/lib/*`) and canonical
 config/cron types from `@vargos/services/config` (schema-derived), never copies it.
 Nothing in `web/` is published — `files` ships only `dist/` (which now includes `dist/web/`).
+
+Use `pnpm npx:local -- <args>` to test the **packaged** artifact the way an end user gets it
+(`pnpm start` runs from source): it builds, `pnpm pack`s the `files` allowlist, installs the
+tarball into a throwaway prefix (fresh dependency tree, like npx), then runs `vargos <args>`.
+Pass `VARGOS_DATA_DIR` to test against a scratch data dir; `VARGOS_NPX_TMP`/`SKIP_BUILD=1` keep
+the staging dir for inspection.
 
 ## Conventions
 
