@@ -2,6 +2,26 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.3.0] - 2026-10-01
+
+### Added
+- **Bundled engineering skill library** — 37 generic workflow skills now ship in `.templates/agent/skills/` and seed into `~/.vargos/agent/skills/` on first boot: the `using-agent-skills` router, the phase skills (`spec-driven-development`, `planning-and-task-breakdown`, `incremental-implementation`, `test-driven-development`, `systematic-debugging`, `code-review-and-quality`, `shipping-and-launch`, …), contextual skills (`api-and-interface-design`, `security-and-hardening`, `performance-optimization`, `context-engineering`, `documentation-and-adrs`, `git-workflow-and-versioning`), and Next.js/React pattern packs plus `mcp-builder`.
+- `pnpm npx:local` — pack the working tree and run the published bin exactly like `npx @vargos-labs/vargos` (respects the `files` allowlist, fresh dependency tree) for pre-release testing.
+
+### Changed
+- **Pi SDK upgraded `0.82.1 → 0.99.2`** (with `pi-mcp-adapter` → 4.0.0). Brings built-in MCP support, the `codemode`/`tool_search` tools, and the `0.84` session-repository migration.
+- `vargos chat` now upgrades a *stale* `pi-mcp-adapter` install instead of only checking that it is listed. Vargos no longer declares `pi-mcp-adapter` as a runtime dependency — the interactive CLI installs its own copy into the agent directory.
+
+### Fixed
+- **Media extraction no longer overflows the context window.** Document text and audio transcripts are bounded to `agent.media.maxExtractChars` (default 100 000 chars); over-budget text is persisted next to the source and only the head plus a `read`/`grep` pointer is injected, protecting low-context models from a compaction loop.
+- Cron: per-task `model` overrides persist across reloads; model specs containing colons resolve correctly; portable `tsx` resolution.
+- Media: reject binary files in the document-extraction fallback.
+
+### Removed
+- The retired bundled `distill-*` skills are deleted from existing installs by a one-time migration (`.migrations/001-remove-legacy-skills.ts`).
+
+[3.3.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.3.0
+
 ## [3.2.21] - 2026-09-21
 
 ### Changed
