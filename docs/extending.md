@@ -81,6 +81,12 @@ Skills are markdown files with YAML frontmatter that the agent loads on demand. 
 
 The bundled `skill-creator` skill (at [`.templates/agent/skills/skill-creator/SKILL.md`](../.templates/agent/skills/skill-creator/SKILL.md), seeded into `~/.vargos/agent/skills/`) is the canonical reference. Read it for full guidance on writing effective skills.
 
+### Bundled skill library
+
+Alongside `skill-creator`, `.templates/agent/skills/` ships a generic **engineering-workflow** library, seeded into `~/.vargos/agent/skills/`. [`using-agent-skills`](../.templates/agent/skills/using-agent-skills/SKILL.md) is the router: it maps a task to the right phase skill — spec (`spec-driven-development`), plan (`planning-and-task-breakdown`), implement (`incremental-implementation`), verify (`test-driven-development`, `systematic-debugging`), review (`code-review-and-quality`), ship (`shipping-and-launch`) — plus Next.js/React pattern packs. None are Vargos-specific; delete any you don't want, though note that seeding is copy-missing so a bundled skill you delete reappears on the next boot.
+
+Seeding copies **missing** files only; changed bundled skills are offered for overwrite by `vargos sync` (it never deletes). Retired bundled skills are cleaned up once by a migration in [`.migrations/`](../.migrations/).
+
 ### File shape
 
 A skill is a directory containing at minimum `SKILL.md`. Optional siblings: `scripts/` (executables), `references/` (loaded on demand), `assets/` (output templates).

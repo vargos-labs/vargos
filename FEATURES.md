@@ -108,7 +108,7 @@ Pi-SDK-powered runtime (`@earendil-works/pi-coding-agent`) with Vargos-managed c
 |---------|--------|
 | `.templates/` tree recursively seeded into `~/.vargos/` at startup (copy-missing only) | ✅ |
 | `pnpm seed` for manual re-seed | ✅ |
-| Bundled templates: `workspace/{AGENTS,SOUL,TOOLS,MEMORY,HEARTBEAT}.md`, `cron/heartbeat.md`, `agents/default.md`, `agent/skills/skill-creator/SKILL.md` | ✅ |
+| Bundled templates: `workspace/{AGENTS,SOUL,TOOLS,MEMORY,HEARTBEAT}.md`, `cron/heartbeat.md`, `agents/default.md`, `agent/skills/*` (engineering-workflow library + `skill-creator`/`slack`/`token-capture`), `agent/mcp.json` | ✅ |
 | Auto-create `~/.vargos/{workspace,sessions,channels,cron,logs}/` on first boot | ✅ |
 | Auto-create `~/.vargos/agents/<channelId>.md` per configured channel at boot | ✅ |
 
@@ -119,6 +119,8 @@ Pi-SDK-powered runtime (`@earendil-works/pi-coding-agent`) with Vargos-managed c
 | Pi SDK auto-discovery: `<agentDir>/skills/`, `<cwd>/.pi/skills/` | ✅ |
 | Vargos additional paths via `services/agent/skills.ts` `resolveSkillPaths`: `<workspaceDir>/skills/`, `<cwd>/skills/` | ✅ |
 | Bundled `skill-creator` skill at `.templates/agent/skills/skill-creator/SKILL.md` | ✅ |
+| Bundled engineering-workflow skill library (`using-agent-skills`, spec/plan/implement/test/review/ship, Next.js/React patterns) seeded into `agent/skills/` | ✅ |
+| Retired bundled skills (`distill-*`) removed from existing installs by `.migrations/001-remove-legacy-skills.ts` | ✅ |
 | Skills metadata in system prompt (description-first, body via `read` tool on demand) | ✅ |
 
 ## Model Management
