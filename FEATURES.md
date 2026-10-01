@@ -150,7 +150,8 @@ Pi-SDK-powered runtime (`@earendil-works/pi-coding-agent`) with Vargos-managed c
 | `bus.register` (method) + `bus.on` (listener) | ✅ |
 | Filesystem service discovery (`services/*/`) + `init`/`dispose` lifecycle | ✅ |
 | In-process hot reload (`bus.restart <service>`) + supervisor respawn (`bus.restartProcess`) | ✅ |
-| `bus.list` introspection (feeds CLI + agent tools) | ✅ |
+| `bus.list` introspection (feeds CLI + agent tools + web console) | ✅ |
+| One `bus.register` schema drives CLI, agent tools, JSON-RPC, and the web console | ✅ |
 | TCP/JSON-RPC server on port 9000 (NOT HTTP) | ✅ |
 | Domain boundaries enforced via ESLint `no-restricted-imports` | ✅ |
 
@@ -193,7 +194,8 @@ The `edge/web` service — starts with the daemon (`vargos start` / `npx` / syst
 | Write actions: `bus.restart`, `channel.restart`, `cron.run`, `agent.execute`, `memory.reindex` (POST `/api/rpc` allow-list) | ✅ |
 | `web.status` bus method | ✅ |
 | Bearer-token auth (localhost-only today) | 📋 |
-| Per-run streaming deltas; `cron.add`/`cron.update` editor | 📋 |
+| Cron editor (`cron.add`/`cron.update`), incl. per-task `model` override | ✅ |
+| Per-run streaming deltas | 📋 |
 
 ## Security
 
@@ -214,7 +216,7 @@ The `edge/web` service — starts with the daemon (`vargos start` / `npx` / syst
 | Voice integration (STT/TTS via LocalAI) | 📋 |
 | Twilio phone channel adapter + outbound voice calls | 📋 |
 | Slack channel adapter | 📋 |
-| Web console — bearer auth, streaming deltas, cron editor (base shipped, see [Web Console](#web-console)) | 📋 |
+| Web console — bearer auth, streaming deltas (cron editor shipped, see [Web Console](#web-console)) | 📋 |
 | Session cost tracking | 📋 |
 | Image description fallback (for non-vision models) | 📋 |
 | Session export/import | 📋 |

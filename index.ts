@@ -11,6 +11,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createLogger } from './lib/logger.js';
+import { resolveTsxCommand } from './lib/tsx-command.js';
 
 const RESTART_EXIT_CODE = 42;
 const RESPAWN_DELAY_MS = 500;
@@ -18,7 +19,10 @@ const log = createLogger('supervisor');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const isDev = import.meta.url.endsWith('.ts');
-const command = isDev ? 'tsx' : process.execPath;
+// Resolve tsx to the repo-local binary when present — the caller's PATH may omit
+// node_modules/.bin (systemd units ship a minimal PATH), in which case spawning
+// bare `tsx` fails with ENOENT. Falls back to PATH for other layouts.
+const command = isDev ? resolveTsxCommand(here) : process.execPath;
 const args = isDev
   ? [join(here, 'boot.ts')]
   : ['--enable-source-maps', join(here, 'boot.js')];

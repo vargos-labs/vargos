@@ -35,6 +35,7 @@ Before opening a PR, start with an issue:
 - Follow existing patterns before introducing new ones
 - No `console.log` — use `createLogger('service-name')` which emits to `log.onLog`
 - **Domain boundaries** are enforced by ESLint (`no-restricted-imports`). Services communicate only via `bus.call()` / `bus.emit()` — no direct cross-domain imports.
+- **One schema, every surface.** A `bus.register` entry's Zod schema is authoritative for the CLI, agent tools, JSON-RPC, and the web console. Import shared schemas from `services/config/schemas/*`; never re-declare a `z.object` inline or hand-write a per-surface shape.
 - Bootstrap files (`AGENTS.md`, `SOUL.md`, `TOOLS.md`) are head/tail-truncated to 6K chars each — design prompts to survive that.
 
 ## Running Tests

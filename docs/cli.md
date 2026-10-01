@@ -99,4 +99,7 @@ These are the rules the surface is held to (enforced by the `live`/`internal` re
 7. **`internal` hides plumbing** (`config.set`, `agent.appendMessage`, `bus.*`) from the CLI and
    agent surfaces while keeping it callable over RPC.
 8. **The registry is the single source of truth** — listings, `--help`, arg shapes, and the
-   `live`/`internal` behavior all derive from one `bus.register(...)` per method.
+   `live`/`internal` behavior all derive from one `bus.register(...)` per method. Never hand-write
+   per-command parsing or a duplicate schema: a missing flag is a schema bug, not a CLI bug. The
+   same schema also drives the agent tools and the web console's write actions (see
+   [Architecture](./architecture.md)).

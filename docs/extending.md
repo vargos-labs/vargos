@@ -9,8 +9,16 @@ In Vargos, **services are tools**. Every method registered with `bus.register` o
 1. Callable over the bus via `bus.call('event.name', params)`
 2. Exposed to the agent as a tool (auto-wrapped by [`services/agent/tools.ts`](../services/agent/tools.ts) `createCustomTools`)
 3. Reachable from external clients via the TCP gateway and the MCP bridge (when enabled)
+4. Callable from the CLI (`vargos <service> <method> …`) — listings, `--help`, and arg shapes derive from the same schema
+5. Usable by the web console's write actions (`POST /api/rpc`), which proxy to the gateway
 
 Write a service method, get a tool for free.
+
+> **Single source of truth.** The `schema` you register is authoritative everywhere — CLI flags,
+> agent tool input, JSON-RPC validation, and the web console. Import it from
+> [`services/config/schemas/`](../services/config/schemas/) instead of re-declaring a `z.object`
+> inline; a duplicated schema drifts and silently drops fields on some surfaces (see
+> [Architecture](./architecture.md)).
 
 ### Anatomy of a service method
 
@@ -18,7 +26,8 @@ The simplest reference is any existing service — read [`services/media/index.t
 
 Pattern in short:
 - In `init(bus)`, call `bus.register('service.method', { description, schema, cli? }, handler)` (a method + agent tool) or `bus.on('event', fn)` (event listener).
-- The `description` and `schema` (Zod) become the agent's tool definition. Write them like documentation for the agent — clear "what it does" and "when to use it".
+- Reuse the shared schemas from [`services/config/schemas/`](../services/config/schemas/) where one exists — the same definition feeds CLI, agent, RPC, and web.
+- The `description` and `schema` (Zod) become the agent's tool definition (and the CLI `--help` text). Write them like documentation for the agent — clear "what it does" and "when to use it".
 - Export `createService(): { name, init(bus), dispose() }`. `dispose()` releases everything `init` opened.
 - Nothing else: `boot.ts` discovers the folder automatically — no registration list to edit.
 

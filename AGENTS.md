@@ -25,7 +25,8 @@ up as part of the daemon — `vargos start` / `npx` / systemd all serve it:
 - Live-update WebSocket — **in the daemon process**, `VARGOS_WEB_WS_PORT` (9004), so it
   reads gateway state straight off the bus and outlives the Next child.
 
-`web/`'s own source imports shared logic from the daemon (`@vargos/lib/*`), never copies it.
+`web/`'s own source imports shared logic from the daemon (`@vargos/lib/*`) and canonical
+config/cron types from `@vargos/services/config` (schema-derived), never copies it.
 Nothing in `web/` is published — `files` ships only `dist/` (which now includes `dist/web/`).
 
 ## Conventions
@@ -55,6 +56,13 @@ Nothing in `web/` is published — `files` ships only `dist/` (which now include
 
 - A service is `services/<name>/index.ts` exporting `createService(): { name, init(bus), dispose() }`. The directory name is the service name and method namespace.
 - `init(bus)` registers methods with `bus.register('service.method', { schema, description, cli }, handler)` and listeners with `bus.on('event', fn)`; `dispose()` must release everything it opened (timers, sockets, db).
+- **One registration, every surface**: a `bus.register` entry is the single source of truth for
+  the CLI (`--help`, arg shapes, `live`/`internal`), agent tools, JSON-RPC, and the web console's
+  write actions. Derive surface code from it — import shared schemas from
+  `services/config/schemas/*`; never re-declare a `z.object` inline or hand-maintain a per-surface
+  shape (a duplicated schema drifts and silently drops fields on some surfaces). The web console
+  reuses the canonical types from `@vargos/services/config` and writes via JSON-RPC; it never
+  copies validation or business logic.
 - Cross-service imports are forbidden. Use `bus.call('service.method', params)` instead.
 - Type-only imports from `services/config/` are allowed for type-checking `AppConfig`.
 

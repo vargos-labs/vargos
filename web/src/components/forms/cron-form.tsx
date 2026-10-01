@@ -37,6 +37,7 @@ export function CronForm({
   const [schedule, setSchedule] = useState("");
   const [task, setTask] = useState("");
   const [enabled, setEnabled] = useState(true);
+  const [model, setModel] = useState("");
   const [notify, setNotify] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -46,6 +47,7 @@ export function CronForm({
     setSchedule(job?.schedule ?? "0 9 * * *");
     setTask(job?.task ?? "");
     setEnabled(job?.enabled ?? true);
+    setModel(job?.model ?? "");
     setNotify((job?.notify ?? []).join(", "));
   }, [open, job]);
 
@@ -67,12 +69,14 @@ export function CronForm({
           schedule: schedule.trim(),
           task,
           enabled,
+          ...(model.trim() ? { model: model.trim() } : { model: undefined }),
           notify: notifyArr,
         })
       : await api.rpc("cron.add", {
           name: name.trim(),
           schedule: schedule.trim(),
           task,
+          ...(model.trim() ? { model: model.trim() } : {}),
           notify: notifyArr,
         });
     setBusy(false);
@@ -141,6 +145,20 @@ export function CronForm({
               placeholder="Check the GPU nodes and post a summary to the ops channel."
               value={task}
               onChange={(e) => setTask(e.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Model"
+            htmlFor="cron-model"
+            hint='Optional override as "provider:modelId" (e.g. deepseek:deepseek-v4-flash). Blank → agent default.'
+          >
+            <Input
+              id="cron-model"
+              className="font-mono text-xs"
+              placeholder="local:vllm:qwen3.8-27b-uncensored"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
             />
           </Field>
 

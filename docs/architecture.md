@@ -1,7 +1,7 @@
 # Architecture
 
 Vargos is a single **bus** that owns one **registry** of methods. The CLI, the agent's
-tools, and the JSON-RPC server are all *projections* of that registry — register a method
+tools, the JSON-RPC server, and the web console are all *projections* of that registry — register a method
 once and it appears, identically, on every surface.
 
 Source: [`core/`](../core/) — `bus.ts`, `loader.ts`, `rpc-server.ts`, `cli.ts`, `services.ts`, `types.ts`.
@@ -10,7 +10,7 @@ Source: [`core/`](../core/) — `bus.ts`, `loader.ts`, `rpc-server.ts`, `cli.ts`
 
 | Concept | API | Validated | Surfaced |
 |---|---|---|---|
-| **Method** | `bus.register(name, opts, handler)` / `bus.call(name, params)` | zod, on every surface | CLI, agent tool, JSON-RPC |
+| **Method** | `bus.register(name, opts, handler)` / `bus.call(name, params)` | zod, on every surface | CLI, agent tool, JSON-RPC, web console |
 | **Event** | `bus.emit(event, payload)` / `bus.on(event, fn)` | no | internal pub/sub only |
 
 `bus.call('does.not.exist')` throws a structured `MethodNotFoundError` (JSON-RPC `-32601`);
@@ -41,6 +41,19 @@ bus.register('channel.send', {
   cli: { positional: ['recipient', 'message'] },                    // positional arg order
 }, (p) => this.send(p));
 ```
+
+Every surface consumes that one entry — surface code is *generated*, never hand-written:
+
+- **CLI** — listings, `--help`, positional/flags, and `live`/`internal` behavior derive from
+  `schema` + `cli` (see [cli.md](./cli.md) rule 8).
+- **Agent tools** — the same Zod schema becomes the tool's `input_schema`.
+- **JSON-RPC** — the same Zod schema validates every call (`ValidationError` → `-32602`).
+- **Web console** — re-exports the canonical types from `services/config/schemas/*` and writes
+  through JSON-RPC; it never re-declares a shape or parses config by hand.
+
+Add a field to the shared schema in `services/config/schemas/*` and it appears on all of them.
+Re-declaring a `z.object` per surface (as `cron.add` once did) is an architecture violation —
+that is how a per-task `model` override silently stopped round-tripping.
 
 ## Discovery and load order
 

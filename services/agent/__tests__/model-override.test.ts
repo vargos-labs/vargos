@@ -30,6 +30,21 @@ const MODELS_JSON = JSON.stringify({
       baseUrl: 'http://localhost:1234', api: 'openai-completions', apiKey: 'test-key',
       models: [{ id: 'model-a', name: 'Model A' }, { id: 'model-b', name: 'Model B' }],
     },
+    // Provider id contains a colon (real local vLLM providers look like this).
+    'local:vllm': {
+      baseUrl: 'http://localhost:1235', api: 'openai-completions', apiKey: 'local',
+      models: [{ id: 'model-a', name: 'Local A' }, { id: 'model:colon', name: 'Local colon model' }, { id: 'model:a', name: 'Ambiguous local model' }],
+    },
+    // Provider id is a prefix of another provider id — used for the ambiguity rule.
+    'local:vllm:model': {
+      baseUrl: 'http://localhost:1236', api: 'openai-completions', apiKey: 'local',
+      models: [{ id: 'a', name: 'Ambiguous A' }],
+    },
+    // Plain provider whose model id contains a colon (built-in catalog ships ids like this).
+    test2: {
+      baseUrl: 'http://localhost:1237', api: 'openai-completions', apiKey: 'test-key',
+      models: [{ id: 'model:colon', name: 'Colon Model' }],
+    },
   },
 });
 
@@ -149,5 +164,52 @@ describe('agent model override', () => {
     mkdirSync(cwd, { recursive: true });
     await runtime.testGetOrCreate('telegram:u2', { cwd });
     expect(runtime.lastCreateOptions?.cwd).toBe(cwd);
+  });
+
+  it('resolves a model when the provider id contains a colon', async () => {
+    const runtime = await createRuntime(tmpDir);
+    runtime.fakeForCreate = fakeSession({ provider: 'local:vllm', id: 'model-a' });
+    await runtime.testGetOrCreate('telegram:u4', { model: 'local:vllm:model-a' });
+    expect(runtime.lastCreateOptions?.model).toMatchObject({ provider: 'local:vllm', id: 'model-a' });
+  });
+
+  it('resolves a model when the model id contains a colon', async () => {
+    const runtime = await createRuntime(tmpDir);
+    runtime.fakeForCreate = fakeSession({ provider: 'test2', id: 'model:colon' });
+    await runtime.testGetOrCreate('telegram:u5', { model: 'test2:model:colon' });
+    expect(runtime.lastCreateOptions?.model).toMatchObject({ provider: 'test2', id: 'model:colon' });
+  });
+
+  it('resolves when BOTH the provider and the model id contain colons', async () => {
+    const runtime = await createRuntime(tmpDir);
+    runtime.fakeForCreate = fakeSession({ provider: 'local:vllm', id: 'model:colon' });
+    await runtime.testGetOrCreate('telegram:u6', { model: 'local:vllm:model:colon' });
+    expect(runtime.lastCreateOptions?.model).toMatchObject({ provider: 'local:vllm', id: 'model:colon' });
+  });
+
+  it('prefers the longest provider id when a spec is ambiguous', async () => {
+    const runtime = await createRuntime(tmpDir);
+    // "local:vllm:model:a" can be (local:vllm / model:a) or (local:vllm:model / a) — both exist.
+    runtime.fakeForCreate = fakeSession({ provider: 'local:vllm:model', id: 'a' });
+    await runtime.testGetOrCreate('telegram:u7', { model: 'local:vllm:model:a' });
+    expect(runtime.lastCreateOptions?.model).toMatchObject({ provider: 'local:vllm:model', id: 'a' });
+  });
+
+  it('rejects a leading-colon spec', async () => {
+    const runtime = await createRuntime(tmpDir);
+    const cached = fakeSession({ provider: 'test', id: 'model-a' });
+    runtime.inject('telegram:u8', cached);
+    const returned = await runtime.testGetOrCreate('telegram:u8', { model: ':model-a' });
+    expect((cached as unknown as { setModel: ReturnType<typeof vi.fn> }).setModel).not.toHaveBeenCalled();
+    expect(returned.model).toMatchObject({ provider: 'test', id: 'model-a' });
+  });
+
+  it('rejects a trailing-colon spec', async () => {
+    const runtime = await createRuntime(tmpDir);
+    const cached = fakeSession({ provider: 'test', id: 'model-a' });
+    runtime.inject('telegram:u9', cached);
+    const returned = await runtime.testGetOrCreate('telegram:u9', { model: 'test:' });
+    expect((cached as unknown as { setModel: ReturnType<typeof vi.fn> }).setModel).not.toHaveBeenCalled();
+    expect(returned.model).toMatchObject({ provider: 'test', id: 'model-a' });
   });
 });

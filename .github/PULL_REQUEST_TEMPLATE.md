@@ -16,4 +16,5 @@
 - [ ] Type check passes (`pnpm run typecheck`)
 - [ ] Lint passes (`pnpm lint`)
 - [ ] No "Co-Authored-By" in commit messages
+- [ ] No duplicated schema/shape across surfaces (derive from `bus.register` / `services/config/schemas`)
 - [ ] Documentation updated if needed
