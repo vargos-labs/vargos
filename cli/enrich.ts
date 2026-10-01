@@ -1,13 +1,9 @@
 /**
- * Optional setup — messaging channels and the MCP adapter. Never required to run
- * the agent, so this is offered at the end of first-run and from `vargos config`,
- * never as a gate.
+ * Optional setup — messaging channels. Never required to run the agent, so this is
+ * offered at the end of first-run and from `vargos config`, never as a gate.
  */
 
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import * as p from '@clack/prompts';
-import { getDataPaths } from '../lib/paths.js';
 import { registerChannel, pairWhatsApp } from './channels.js';
 
 /** Add one Telegram or WhatsApp channel. */
@@ -61,37 +57,13 @@ export async function addChannel(): Promise<void> {
   }
 }
 
-/** Install the pi MCP adapter so the agent can load MCP tools. */
-export async function enableMcp(): Promise<void> {
-  const { dataDir } = getDataPaths();
-  const agentDir = path.join(dataDir, 'agent');
-  const spin = p.spinner();
-  spin.start('Installing MCP adapter');
-  try {
-    const { execSync } = await import('node:child_process');
-    let piCli = 'pi';
-    const local = path.join(process.cwd(), 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'cli.js');
-    if (existsSync(local)) piCli = local;
-    execSync(`node "${piCli}" install npm:pi-mcp-adapter`, {
-      stdio: 'pipe',
-      env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
-    });
-    spin.stop('MCP adapter installed.');
-  } catch {
-    spin.stop('Skipped — install later: pi install npm:pi-mcp-adapter');
-  }
-}
-
 /** First-run tail: offer the optional extras once, in sequence. */
 export async function offerEnrichment(): Promise<void> {
   p.note(
-    'Optional — talk to your agent from your phone, or give it MCP tools.\nSkip any of this and add it later with "vargos config".',
+    'Optional — talk to your agent from your phone.\nSkip this and add it later with "vargos config".',
     'Extras',
   );
 
   const wantChannel = await p.confirm({ message: 'Connect a messaging channel now?', initialValue: false });
   if (!p.isCancel(wantChannel) && wantChannel) await addChannel();
-
-  const wantMcp = await p.confirm({ message: 'Install the MCP adapter now?', initialValue: false });
-  if (!p.isCancel(wantMcp) && wantMcp) await enableMcp();
 }

@@ -65,6 +65,20 @@ describe('CronService — Markdown File CRUD', () => {
     expect(result.items[0]).toMatchObject({ id: 'test-task', name: 'Test Task', schedule: '0 9 * * *', enabled: true, task: 'Test prompt' });
   });
 
+  it('persists a per-task model override across a reload', async () => {
+    await startService();
+    const added = await add({ name: 'Local Model Task', schedule: '0 9 * * *', task: 'Use the local box', model: 'vargos-110:vllm:qwen3.8-27b-uncensored' });
+    expect(added).toMatchObject({ model: 'vargos-110:vllm:qwen3.8-27b-uncensored' });
+
+    service.dispose();
+    bus.releaseService('cron');
+    await startService(); // fresh instance reads the frontmatter back from disk
+
+    const result = await search();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].model).toBe('vargos-110:vllm:qwen3.8-27b-uncensored');
+  });
+
   it('deletes markdown file when task is removed', async () => {
     await startService();
     await add({ name: 'Task to Delete', schedule: '0 9 * * *', task: 'Will be deleted' });

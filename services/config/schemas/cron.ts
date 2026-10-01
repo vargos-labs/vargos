@@ -9,7 +9,7 @@ export const CronTaskSchema = z.object({
   name:                 z.string().min(1).describe('Human-readable task name'),
   schedule:             z.string().min(1).describe('Cron schedule expression (e.g., "0 9 * * *" for 9am daily)'),
   task:                 z.string().min(1).describe('Task prompt/instruction to execute. Supports ${WORKSPACE_DIR}, ${DATA_DIR}, etc. interpolation'),
-  model:                z.string().optional().describe('Model override for this task (e.g., "claude-opus-4"). If not set, uses agent.model from config.'),
+  model:                z.string().optional().describe('Model override for this task as "provider:modelId" (e.g. "deepseek:deepseek-v4-flash"). If not set, uses the agent default.'),
   notify:               z.array(z.string()).optional().describe('Channel session keys to send results to (e.g., "whatsapp-vadi-indo:+1234567890")'),
   enabled:              z.boolean().default(true).describe('Whether the task is active'),
   activeHours:          z.array(z.number().min(0).max(23)).optional().describe('Active hours window [startHour, endHour] for conditional execution (0-23)'),

@@ -2,6 +2,34 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.4.1] - 2026-10-01
+
+### Fixed
+- Bundled skills `nextjs-anti-patterns` and `test-driven-development` shipped unquoted `description` values containing `: `, which is invalid YAML — Pi dropped them and reported a **skill conflict** in `vargos chat`. They now use folded block scalars, and a test validates the frontmatter of every bundled `SKILL.md`.
+
+[3.4.1]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.1
+
+## [3.4.0] - 2026-10-01
+
+### Added
+- **Bundled engineering skill library** — 37 generic workflow skills now ship in `.templates/agent/skills/` and seed into `~/.vargos/agent/skills/` on first boot: the `using-agent-skills` router, the phase skills (`spec-driven-development`, `planning-and-task-breakdown`, `incremental-implementation`, `test-driven-development`, `systematic-debugging`, `code-review-and-quality`, `shipping-and-launch`, …), contextual skills (`api-and-interface-design`, `security-and-hardening`, `performance-optimization`, `context-engineering`, `documentation-and-adrs`, `git-workflow-and-versioning`), and Next.js/React pattern packs plus `mcp-builder`.
+- `pnpm npx:local` — pack the working tree and run the published bin exactly like `npx @vargos-labs/vargos` (respects the `files` allowlist, fresh dependency tree) for pre-release testing.
+
+### Changed
+- **Pi SDK upgraded `0.82.1 → 0.99.2`.** Brings built-in MCP support, the `codemode`/`tool_search` tools, and the `0.84` session-repository migration.
+- **Dropped the third-party `pi-mcp-adapter`.** Pi 0.99 ships `builtin:mcp` — enabled by default, reading the same `agent/mcp.json` with the richer `exposure`/`toolExposure` model — so `vargos chat` no longer installs or needs an adapter. Migration `002-remove-mcp-adapter` removes it and translates `directTools` → `exposure` on existing installs.
+
+### Fixed
+- **Media extraction no longer overflows the context window.** Document text and audio transcripts are bounded to `agent.media.maxExtractChars` (default 100 000 chars); over-budget text is persisted next to the source and only the head plus a `read`/`grep` pointer is injected, protecting low-context models from a compaction loop.
+- Cron: per-task `model` overrides persist across reloads; model specs containing colons resolve correctly; portable `tsx` resolution.
+- Media: reject binary files in the document-extraction fallback.
+
+### Removed
+- The retired bundled `distill-*` skills are deleted from existing installs by a one-time migration (`.migrations/001-remove-legacy-skills.ts`).
+- The `pi-mcp-adapter` lifecycle (`cli/mcp-adapter.ts`, and the "install the MCP adapter" prompts in first-run and `vargos config`) — superseded by Pi's `builtin:mcp`.
+
+[3.4.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.0
+
 ## [3.2.21] - 2026-09-21
 
 ### Changed

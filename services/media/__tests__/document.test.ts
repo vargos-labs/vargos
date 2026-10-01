@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
-import { writeFileSync, mkdirSync, symlinkSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, symlinkSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { extractDocument } from '../providers/document.js';
+import { DEFAULT_MAX_EXTRACT_CHARS } from '../bound-text.js';
 import { resetDataPaths } from '../../../lib/paths.js';
 
 describe('extractDocument', () => {
@@ -139,9 +140,9 @@ describe('extractDocument', () => {
       await expect(extractDocument(filePath, 'text/plain')).rejects.toThrow('Document too large');
     });
 
-    it('accepts text files within 1 MB limit', async () => {
+    it('accepts text files within 1 MB limit and under the context budget', async () => {
       const filePath = path.join(tempDir, 'medium.txt');
-      const content = 'x'.repeat(1024 * 500);
+      const content = 'x'.repeat(90_000); // below DEFAULT_MAX_EXTRACT_CHARS
       writeFileSync(filePath, content, 'utf-8');
 
       const result = await extractDocument(filePath, 'text/plain');
@@ -156,6 +157,55 @@ describe('extractDocument', () => {
 
       // .md uses 1 MB text limit, should reject
       await expect(extractDocument(filePath, 'text/markdown')).rejects.toThrow('Document too large');
+    });
+  });
+
+  describe('context budget', () => {
+    it('truncates over-budget text and persists the full extracted text', async () => {
+      const filePath = path.join(tempDir, 'big.txt');
+      const content = 'x'.repeat(250_000);
+      writeFileSync(filePath, content, 'utf-8');
+
+      const result = await extractDocument(filePath, 'text/plain');
+
+      expect(result.text.startsWith('x'.repeat(DEFAULT_MAX_EXTRACT_CHARS))).toBe(true);
+      expect(result.text).toContain('truncated');
+      const fullPath = `${filePath}.extracted.txt`;
+      expect(result.text).toContain(fullPath);
+      expect(existsSync(fullPath)).toBe(true);
+      expect(readFileSync(fullPath, 'utf-8')).toBe(content);
+    });
+
+    it('honors a custom maxChars budget', async () => {
+      const filePath = path.join(tempDir, 'custom.txt');
+      const content = 'abcdefghij'.repeat(10); // 100 chars
+      writeFileSync(filePath, content, 'utf-8');
+
+      const result = await extractDocument(filePath, 'text/plain', { maxChars: 25 });
+
+      expect(result.text.startsWith(content.slice(0, 25))).toBe(true);
+      expect(result.text).toContain('truncated');
+      expect(readFileSync(`${filePath}.extracted.txt`, 'utf-8')).toBe(content);
+    });
+
+    it('does not write an extracted file when under budget', async () => {
+      const filePath = path.join(tempDir, 'small.txt');
+      writeFileSync(filePath, 'short', 'utf-8');
+
+      await extractDocument(filePath, 'text/plain', { maxChars: 100 });
+
+      expect(existsSync(`${filePath}.extracted.txt`)).toBe(false);
+    });
+
+    it('applies the same budget to the unknown-format fallback', async () => {
+      const filePath = path.join(tempDir, 'big.xyz');
+      const content = 'y'.repeat(150_000);
+      writeFileSync(filePath, content, 'utf-8');
+
+      const result = await extractDocument(filePath, 'application/xyz', { maxChars: 1_000 });
+
+      expect(result.text).toContain('truncated');
+      expect(readFileSync(`${filePath}.extracted.txt`, 'utf-8')).toBe(content);
     });
   });
 

@@ -39,8 +39,9 @@ adapter (`vargos config show` prints the merged config).
 
 ## Architecture
 
-One **bus** owns one **registry** of methods. The CLI, the agent's tools, and the JSON-RPC
-server are all projections of that registry — register a method once, it appears everywhere.
+One **bus** owns one **registry** of methods. The CLI, the agent's tools, the JSON-RPC server,
+and the web console are all projections of that registry — register a method once (with its Zod
+schema), it appears everywhere. Never hand-maintain a per-surface shape.
 
 ```
         CLI            Agent tools        JSON-RPC :9000

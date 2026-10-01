@@ -18,7 +18,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { Bus, Service } from '../../core/types.js';
 import type { CronTask, CronAddParams, CronUpdateParams } from '../../services/config/index.js';
-import { CronTaskSchema } from '../../services/config/schemas/cron.js';
+import { CronTaskSchema, CronAddSchema, CronUpdateSchema } from '../../services/config/schemas/cron.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
 import { formatZodIssues } from '../../core/errors.js';
@@ -78,12 +78,7 @@ export class CronService implements Service {
 
     bus.register('cron.add', {
       description: 'Add a new scheduled cron task.',
-      schema: z.object({
-        name: z.string(),
-        schedule: z.string(),
-        task: z.string(),
-        notify: z.array(z.string()).optional(),
-      }),
+      schema: CronAddSchema,
       cli: { positional: ['name', 'schedule', 'task'] },
     }, (p) => this.add(p));
 
@@ -95,14 +90,7 @@ export class CronService implements Service {
 
     bus.register('cron.update', {
       description: 'Update a scheduled cron task.',
-      schema: z.object({
-        id: z.string(),
-        name: z.string().optional(),
-        schedule: z.string().optional(),
-        task: z.string().optional(),
-        enabled: z.boolean().optional(),
-        notify: z.array(z.string()).optional(),
-      }),
+      schema: CronUpdateSchema,
       cli: { positional: ['id'] },
     }, (p) => this.update(p));
 
@@ -358,6 +346,7 @@ export class CronService implements Service {
             schedule: String(parsed.frontmatter.schedule ?? ''),
             task: parsed.body || '',
             enabled: parsed.frontmatter.enabled === true,
+            model: parsed.frontmatter.model ? String(parsed.frontmatter.model) : undefined,
             notify: Array.isArray(parsed.frontmatter.notify) ? parsed.frontmatter.notify.map(String) : undefined,
             activeHours: Array.isArray(parsed.frontmatter.activeHours) ? (parsed.frontmatter.activeHours as number[]).slice(0, 2) as [number, number] : undefined,
             activeHoursTimezone: parsed.frontmatter.activeHoursTimezone ? String(parsed.frontmatter.activeHoursTimezone) : undefined,

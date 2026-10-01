@@ -9,8 +9,9 @@ start`, `npx @vargos-labs/vargos` and systemd all bring it up; there is no separ
 `edge/web` spawns the Next server as a supervised child (**`next dev`** from a clone,
 the **standalone bundle** in `dist/web/` in production) and runs the live-update
 WebSocket in the daemon process. The `web/` source is a private workspace member
-(`@vargos-labs/vargos-web`) that imports shared logic from the daemon (`@vargos/lib/*`)
-instead of copying it.
+(`@vargos-labs/vargos-web`) that imports shared logic from the daemon (`@vargos/lib/*`) and
+canonical config/cron types from `@vargos/services/config` (schema-derived) instead of
+copying them.
 
 ## Ports
 
@@ -31,7 +32,7 @@ The console continues the daemon's `9000` block:
 | Dashboard | `bus.status`, `agent.status`, `memory.stats` (live RPC) + fs-derived counts |
 | Sessions | `~/.vargos/sessions/<channel>/…` JSONL transcripts (fs) |
 | Channels | `~/.vargos/config.json` (fs) + `channel.list` (live RPC) |
-| Cron | `~/.vargos/cron/*.md` frontmatter (fs) |
+| Cron | `cron.list` (live RPC) — canonical `CronTask` types re-exported from the daemon schema |
 | Models | `~/.vargos/agent/models.json` (fs) |
 | MCP | `~/.vargos/agent/mcp.json` (fs) |
 | Agents | `~/.vargos/agents/*.md` personas (fs) |
@@ -126,3 +127,7 @@ It is deliberately **skin-deep** so Vargos changes keep flowing through untouche
 - **Shared, not copied.** `src/server/{paths,frontmatter}.ts` import from `@vargos/lib/*`
   (workspace root); the RPC/fs transport in `src/server/*` is otherwise unchanged. The
   live-update WebSocket lives in `edge/web`, not here.
+- **The registry is the single source of truth.** `src/lib/types.ts` re-exports canonical shapes
+  (`CronTask`, `AppConfig`, …) from `@vargos/services/config` — the same schemas that drive the
+  CLI and agent tools. Data comes from the daemon (`cron.list`) or the `/api/rpc` allow-list,
+  never a hand-rolled frontmatter parser that could drift from the daemon's validation.

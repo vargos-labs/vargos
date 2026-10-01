@@ -10,6 +10,7 @@ pnpm start            # boot gateway + all services + web console (edge/web)
 pnpm chat             # Pi SDK CLI bound to ~/.vargos/agent (interactive REPL)
 pnpm cli              # run the CLI entrypoint directly (tsx cli.ts)
 pnpm seed             # manual `seedDataDir()` — copy missing templates into ~/.vargos/
+pnpm npx:local -- …   # build+pack locally and run the packed tarball like `npx @vargos-labs/vargos`
 pnpm run typecheck    # tsc --noEmit (root; `web` is excluded — it has its own)
 pnpm run build        # tsc → dist/, then build+stage the web console into dist/web/
 pnpm run test:run     # single test run
@@ -25,8 +26,15 @@ up as part of the daemon — `vargos start` / `npx` / systemd all serve it:
 - Live-update WebSocket — **in the daemon process**, `VARGOS_WEB_WS_PORT` (9004), so it
   reads gateway state straight off the bus and outlives the Next child.
 
-`web/`'s own source imports shared logic from the daemon (`@vargos/lib/*`), never copies it.
+`web/`'s own source imports shared logic from the daemon (`@vargos/lib/*`) and canonical
+config/cron types from `@vargos/services/config` (schema-derived), never copies it.
 Nothing in `web/` is published — `files` ships only `dist/` (which now includes `dist/web/`).
+
+Use `pnpm npx:local -- <args>` to test the **packaged** artifact the way an end user gets it
+(`pnpm start` runs from source): it builds, `pnpm pack`s the `files` allowlist, installs the
+tarball into a throwaway prefix (fresh dependency tree, like npx), then runs `vargos <args>`.
+Pass `VARGOS_DATA_DIR` to test against a scratch data dir; `VARGOS_NPX_TMP`/`SKIP_BUILD=1` keep
+the staging dir for inspection.
 
 ## Conventions
 
@@ -34,7 +42,7 @@ Nothing in `web/` is published — `files` ships only `dist/` (which now include
 - **Domain boundaries**: services talk via `bus.call()` / `bus.emit()`; cross-domain imports are blocked by ESLint (`no-restricted-imports`).
 - **Config**: `~/.vargos/config.json` + `~/.vargos/agent/{mcp,models,settings,auth}.json`. MCP servers configured in `agent/mcp.json` (shared with Pi SDK); others consolidated by `services/config`.
 - **API keys**: provider entries in `agent/models.json`; env `${PROVIDER}_API_KEY` overrides.
-- **Skills**: auto-loaded from `~/.vargos/agent/skills/`, `~/.vargos/workspace/skills/`, `<cwd>/skills/`, `<cwd>/.pi/skills/`. Pi SDK injects `name` + `description`; body is read on demand. Bundled: `skill-creator`.
+- **Skills**: auto-loaded from `~/.vargos/agent/skills/`, `~/.vargos/workspace/skills/`, `<cwd>/skills/`, `<cwd>/.pi/skills/`. Pi SDK injects `name` + `description`; body is read on demand. Bundled in `.templates/agent/skills/`: `skill-creator`, `slack`, `token-capture`, plus a generic engineering-workflow library (spec → plan → implement → verify → review → ship — e.g. `using-agent-skills`, `spec-driven-development`, `planning-and-task-breakdown`, `test-driven-development`, `code-review-and-quality`).
 - **Bootstrap files**: only `AGENTS.md`, `SOUL.md`, `TOOLS.md` from workspace + cwd are merged into the system prompt (`services/agent/index.ts:365`). Pi SDK auto-discovers `AGENTS.md` from cwd separately as `# Project Context`.
 - **Channel personas**: per-channel system-prompt overrides at `~/.vargos/agents/<channelId>.md`. Frontmatter `allowedTools?: string[]` (glob whitelist applied to bus tools); body appended after bootstrap. `default.md` seeds new channels at boot.
 - **Reply or Cross-channel forwarding**: `channel.send` with `fromSessionKey` injects `[fromSessionKey] text` into target session history via `agent.appendMessage` (no agent run on receiver).
@@ -55,6 +63,13 @@ Nothing in `web/` is published — `files` ships only `dist/` (which now include
 
 - A service is `services/<name>/index.ts` exporting `createService(): { name, init(bus), dispose() }`. The directory name is the service name and method namespace.
 - `init(bus)` registers methods with `bus.register('service.method', { schema, description, cli }, handler)` and listeners with `bus.on('event', fn)`; `dispose()` must release everything it opened (timers, sockets, db).
+- **One registration, every surface**: a `bus.register` entry is the single source of truth for
+  the CLI (`--help`, arg shapes, `live`/`internal`), agent tools, JSON-RPC, and the web console's
+  write actions. Derive surface code from it — import shared schemas from
+  `services/config/schemas/*`; never re-declare a `z.object` inline or hand-maintain a per-surface
+  shape (a duplicated schema drifts and silently drops fields on some surfaces). The web console
+  reuses the canonical types from `@vargos/services/config` and writes via JSON-RPC; it never
+  copies validation or business logic.
 - Cross-service imports are forbidden. Use `bus.call('service.method', params)` instead.
 - Type-only imports from `services/config/` are allowed for type-checking `AppConfig`.
 
@@ -64,28 +79,32 @@ PRs go from a feature branch into `dev`. The maintainer merges `dev` → `main` 
 
 ## Release Workflow (Maintainer Only)
 
+Publishing is done by CI from the pushed source, not from a local build.
+`.github/workflows/publish.yml` runs `pnpm install` + `pnpm run build` on every push to `main`,
+then `pnpm publish`. `dist/` is gitignored and never committed — CI rebuilds `.templates/`,
+`.migrations/`, and the web console each time — so there is no manual build step and nothing to
+`git add` under `dist/`.
+
 1. **Bump version** in `package.json`
    ```bash
-   # Edit manually or use npm version
-   npm version patch  # or minor, major
+   # Edit manually, or:
+   npm version patch --no-git-tag-version   # or minor, major
    ```
 
-2. **Rebuild for distribution**
-   ```bash
-   pnpm run build
-   ```
-
-3. **Update CHANGELOG.md** — Add a new section for the version with:
+2. **Update CHANGELOG.md** — Add a new section for the version with:
    - Version number and date (e.g., `## [2.0.14] - 2026-05-16`)
    - Categories: Added, Changed, Fixed, Removed, Security
    - Link to GitHub release at bottom: `[2.0.14]: https://github.com/vargos-labs/vargos/releases/tag/v2.0.14`
 
-4. **Commit and push to main**
+3. **Commit and push the branch**
    ```bash
-   git add package.json dist/ CHANGELOG.md
+   git add package.json CHANGELOG.md
    git commit -m "chore: bump version to X.Y.Z"
-   git push origin main --no-verify
+   git push origin dev
    ```
+
+4. **Open the `dev → main` PR** and squash-merge it. Direct pushes to `main` are blocked by the
+   pre-push hook, and the publish workflow runs on `main`.
 
 5. **GitHub Actions publishes automatically**
    - Workflow: `.github/workflows/publish.yml`

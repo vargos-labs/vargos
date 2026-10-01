@@ -406,11 +406,23 @@ export class AgentService implements Service {
     log.info(`[${sessionKey}] model set ${resolved.provider}:${resolved.id}`);
   }
 
-  /** Resolve a `provider:modelId` override to a Pi SDK model, or undefined if unknown. */
+  /**
+   * Resolve a `provider:modelId` override to a Pi SDK model, or undefined if unknown.
+   *
+   * Both sides may contain a colon: provider ids can (local vLLM providers are
+   * registered as e.g. "vargos-110:vllm") and so can model ids (the built-in
+   * catalog ships ids like "amazon-bedrock:qwen.qwen3-235b-a22b-2507-v1:0").
+   * A single fixed split therefore can't cover both, so probe every colon
+   * boundary — longest provider first — and return the first split the
+   * registry actually resolves.
+   */
   private resolveModel(modelSpec?: string): ResolvedModel | undefined {
     if (!modelSpec) return undefined;
-    const [provider, modelId] = modelSpec.split(':');
-    return this.modelRegistry.find(provider, modelId);
+    for (let sep = modelSpec.lastIndexOf(':'); sep > 0; sep = modelSpec.lastIndexOf(':', sep - 1)) {
+      const model = this.modelRegistry.find(modelSpec.slice(0, sep), modelSpec.slice(sep + 1));
+      if (model) return model;
+    }
+    return undefined;
   }
 
   /**

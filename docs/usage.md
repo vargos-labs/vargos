@@ -187,6 +187,14 @@ In a group `chatId` and `fromUserId` are different values and must not be confla
 
 Configure transcription/vision providers in `agent/settings.json` `media`. Implementation: [`services/media/`](../services/media/).
 
+Extracted media text (documents and audio transcripts) is capped before it enters the agent's
+context — a single over-limit message cannot be summarized away by compaction and pins the
+session in an overflow-compaction loop (worst on small-context models, e.g. 110k tokens). When
+a document or transcript exceeds the budget the full text is saved next to the source
+(`<file>.extracted.txt` / `<file>.transcript.txt`) and only the head is injected, with a pointer
+the agent can `read`/`grep` on demand. Tune the ceiling (default `100000` chars ≈ 25k tokens) via
+`agent.media.maxExtractChars`; set it lower for small-context models.
+
 ### Status reactions
 
 While the agent processes, the bot updates its message reactions: 👀 received → 🤔 thinking → 🔧 tool use → 👍 done / ❗ error. See [`services/channel/status-reactions.ts`](../services/channel/status-reactions.ts).
@@ -250,6 +258,8 @@ Vargos has two sides to MCP:
 ### Client (active)
 
 External MCP servers are configured in `~/.vargos/agent/mcp.json` (shared with Pi SDK). This file is seeded with examples on first run.
+
+The file feeds both clients. The daemon registers every tool on the bus (see below); the interactive `vargos chat` uses Pi's built-in `builtin:mcp` (Pi 0.99+), which registers tools as `mcp__<server>__<tool>` and honors the `exposure` / `toolExposure` keys. The daemon ignores those two keys — it exposes all of a server's tools.
 
 At boot, [`services/mcp/`](../services/mcp/) spawns each server, lists its tools, and registers them on the bus namespaced as `mcp.<server>.<tool>`. The agent calls them like any other bus tool. Channel persona `allowedTools` globs apply (e.g. `mcp.atlassian.*`).
 

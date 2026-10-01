@@ -12,6 +12,10 @@ Vargos splits config across **five files** under `~/.vargos/`. The split keeps s
 
 All four are `0o600` (owner-only). The config service merges them at runtime. Override the data dir: `VARGOS_DATA_DIR=/some/path`.
 
+The `services/config/schemas/*` definitions are the **single source of truth**: they validate CLI,
+agent-tool, JSON-RPC, and web calls, and the CLI derives its flags/`--help` from them. Adding a key
+to a schema surfaces it on every surface at once — never hand-maintain a per-surface shape.
+
 ## Channels
 
 Each entry in `config.json#channels[]` matches [`services/config/schemas/channels.ts`](../services/config/schemas/channels.ts). Keys: `type` (`telegram` | `whatsapp`), `id` (unique instance id, used as sessionKey prefix), `enabled`, `model?` (per-channel override), `cwd?`, `debounceMs?`, `allowFrom?` (whitelist), plus `botToken` for telegram.
@@ -20,7 +24,13 @@ The old `instructionsFile` field has been removed — channel system-prompt over
 
 ## Cron tasks
 
-File-based, one task per markdown file at `~/.vargos/cron/<id>.md`. Frontmatter schema: [`services/config/schemas/cron.ts`](../services/config/schemas/cron.ts). Body is the prompt the agent runs. Notify outputs are sent via `channel.send` with `fromSessionKey` so target session history records the source.
+File-based, one task per markdown file at `~/.vargos/cron/<id>.md`. Frontmatter schema:
+[`services/config/schemas/cron.ts`](../services/config/schemas/cron.ts) — keys `name`, `schedule`,
+`task`, `model?` (`provider:modelId` override), `notify?`, `enabled`, `activeHours?`,
+`activeHoursTimezone?`. The same schema validates `cron.add`/`cron.update` over CLI, agent tools,
+JSON-RPC, and the web console, and is read back on reload (so overrides survive a restart). Body
+is the prompt the agent runs. Notify outputs are sent via `channel.send` with `fromSessionKey` so
+target session history records the source.
 
 The bundled `heartbeat` task is the canonical example — see [`.templates/cron/heartbeat.md`](../.templates/cron/heartbeat.md).
 
@@ -47,9 +57,12 @@ To run Pi CLI against the same config: `pnpm chat` (sets `PI_CODING_AGENT_DIR` a
 
 ## MCP
 
-External MCP servers are configured in `~/.vargos/agent/mcp.json`, which is shared between Vargos (`pnpm start`) and Pi SDK CLI (`pnpm chat`). See [MCP documentation](./usage.md) for examples and setup.
+External MCP servers are configured in `~/.vargos/agent/mcp.json`, shared between the Vargos daemon (`vargos start`) and the interactive CLI (`vargos chat`). See [MCP documentation](./usage.md) for examples and setup.
 
-Tools are namespaced as `mcp.<server>.<tool>` on the bus when the Vargos server is running.
+Two clients read the same file with different surfaces:
+
+- **Daemon** — [`services/mcp/`](../services/mcp/) spawns each server and registers its tools on the bus as `mcp.<server>.<tool>`.
+- **`vargos chat`** — Pi's built-in `builtin:mcp` extension (Pi 0.99+) connects the same servers and registers tools as `mcp__<server>__<tool>`. Control how they reach the model with `exposure` (`direct` | `deferred` | `codemode` | `hidden`, default `codemode`) and per-tool `toolExposure`. No third-party adapter is installed or needed.
 
 The MCP **server** (Vargos exposing itself as an MCP server) lives in [`edge/mcp/`](../edge/mcp/) and is currently commented out in [`index.ts`](../index.ts).
 
