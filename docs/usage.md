@@ -187,6 +187,14 @@ In a group `chatId` and `fromUserId` are different values and must not be confla
 
 Configure transcription/vision providers in `agent/settings.json` `media`. Implementation: [`services/media/`](../services/media/).
 
+Extracted media text (documents and audio transcripts) is capped before it enters the agent's
+context — a single over-limit message cannot be summarized away by compaction and pins the
+session in an overflow-compaction loop (worst on small-context models, e.g. 110k tokens). When
+a document or transcript exceeds the budget the full text is saved next to the source
+(`<file>.extracted.txt` / `<file>.transcript.txt`) and only the head is injected, with a pointer
+the agent can `read`/`grep` on demand. Tune the ceiling (default `100000` chars ≈ 25k tokens) via
+`agent.media.maxExtractChars`; set it lower for small-context models.
+
 ### Status reactions
 
 While the agent processes, the bot updates its message reactions: 👀 received → 🤔 thinking → 🔧 tool use → 👍 done / ❗ error. See [`services/channel/status-reactions.ts`](../services/channel/status-reactions.ts).

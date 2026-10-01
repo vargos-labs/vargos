@@ -97,6 +97,7 @@ export const AgentConfigSchema = PiAgentSettingsSchema.extend({
   media: z.object({
     audio: z.string().optional(),
     image: z.string().optional(),
+    maxExtractChars: z.number().int().positive().optional().describe('Max characters of extracted media text (documents, audio transcripts) injected into the agent context. Over the limit the full text is saved next to the file and only the head is injected. Default 100000 (~25k tokens), tune down for small-context models.'),
   }).optional(),
 }).passthrough(); // Allow custom fields from Pi Agent
 

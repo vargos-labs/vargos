@@ -10,6 +10,7 @@ import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { createProvider } from './providers/index.js';
 import { extractDocument } from './providers/document.js';
+import { boundForContext, DEFAULT_MAX_EXTRACT_CHARS } from './bound-text.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -113,12 +114,17 @@ export class MediaService implements Service {
       description: 'Extract text from documents (PDF, DOCX, XLSX, TXT, MD).',
       schema: z.object({ filePath: z.string(), mimeType: z.string() }),
       cli: { positional: ['filePath', 'mimeType'] },
-    }, (p) => extractDocument(p.filePath, p.mimeType));
+    }, (p) => extractDocument(p.filePath, p.mimeType, { maxChars: this.maxExtractChars() }));
 
     log.debug('media service initialized');
   }
 
   dispose(): void {}
+
+  /** Context budget for media text (documents, transcripts); see bound-text.ts. */
+  private maxExtractChars(): number {
+    return this.config.agent?.media?.maxExtractChars ?? DEFAULT_MAX_EXTRACT_CHARS;
+  }
 
   private resolveProviderConfig(ref: string): { provider: string; model: string; apiKey: string; baseUrl?: string } {
     const [provider, model] = ref.split(':');
@@ -137,7 +143,8 @@ export class MediaService implements Service {
     const text = await this.cache.get(params.filePath, 'transcribe', () =>
       createProvider(provider).transcribeAudio(params.filePath, model, apiKey, baseUrl),
     );
-    return { text };
+    const bounded = await boundForContext(text, `${params.filePath}.transcript.txt`, this.maxExtractChars(), 'transcript');
+    return { text: bounded };
   }
 
   private async describeImage(params: { filePath: string }): Promise<{ description: string }> {
