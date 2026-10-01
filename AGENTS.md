@@ -79,28 +79,32 @@ PRs go from a feature branch into `dev`. The maintainer merges `dev` → `main` 
 
 ## Release Workflow (Maintainer Only)
 
+Publishing is done by CI from the pushed source, not from a local build.
+`.github/workflows/publish.yml` runs `pnpm install` + `pnpm run build` on every push to `main`,
+then `pnpm publish`. `dist/` is gitignored and never committed — CI rebuilds `.templates/`,
+`.migrations/`, and the web console each time — so there is no manual build step and nothing to
+`git add` under `dist/`.
+
 1. **Bump version** in `package.json`
    ```bash
-   # Edit manually or use npm version
-   npm version patch  # or minor, major
+   # Edit manually, or:
+   npm version patch --no-git-tag-version   # or minor, major
    ```
 
-2. **Rebuild for distribution**
-   ```bash
-   pnpm run build
-   ```
-
-3. **Update CHANGELOG.md** — Add a new section for the version with:
+2. **Update CHANGELOG.md** — Add a new section for the version with:
    - Version number and date (e.g., `## [2.0.14] - 2026-05-16`)
    - Categories: Added, Changed, Fixed, Removed, Security
    - Link to GitHub release at bottom: `[2.0.14]: https://github.com/vargos-labs/vargos/releases/tag/v2.0.14`
 
-4. **Commit and push to main**
+3. **Commit and push the branch**
    ```bash
-   git add package.json dist/ CHANGELOG.md
+   git add package.json CHANGELOG.md
    git commit -m "chore: bump version to X.Y.Z"
-   git push origin main --no-verify
+   git push origin dev
    ```
+
+4. **Open the `dev → main` PR** and squash-merge it. Direct pushes to `main` are blocked by the
+   pre-push hook, and the publish workflow runs on `main`.
 
 5. **GitHub Actions publishes automatically**
    - Workflow: `.github/workflows/publish.yml`
