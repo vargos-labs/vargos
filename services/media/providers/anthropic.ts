@@ -8,6 +8,10 @@ export class AnthropicProvider implements MediaProvider {
     throw new Error('Anthropic does not support audio transcription. Use openai provider.');
   }
 
+  async synthesizeSpeech(): Promise<Buffer> {
+    throw new Error('Anthropic does not support speech synthesis. Use an openai-compatible provider.');
+  }
+
   async describeImage(filePath: string, model: string, apiKey: string, baseUrl?: string): Promise<string> {
     const buffer = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();

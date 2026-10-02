@@ -57,4 +57,29 @@ export class OpenAIProvider implements MediaProvider {
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
     return data.choices[0]?.message?.content ?? '';
   }
+
+  async synthesizeSpeech(params: {
+    text: string;
+    model: string;
+    apiKey: string;
+    voice?: string;
+    responseFormat?: string;
+    baseUrl?: string;
+  }): Promise<Buffer> {
+    const body: Record<string, unknown> = {
+      model: params.model || 'tts-1',
+      input: params.text,
+    };
+    if (params.voice) body.voice = params.voice;
+    if (params.responseFormat) body.response_format = params.responseFormat;
+
+    const res = await fetch(`${normalizeApiBaseUrl(params.baseUrl)}/v1/audio/speech`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${params.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    validateHttpResponse(res, 'Speech synthesis API');
+    return Buffer.from(await res.arrayBuffer());
+  }
 }
