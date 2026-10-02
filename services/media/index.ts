@@ -9,6 +9,8 @@ import type { Bus, Service } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { createProvider } from './providers/index.js';
+import { OpenAIProvider } from './providers/openai.js';
+import type { MediaProvider } from './providers/provider.js';
 import { extractDocument } from './providers/document.js';
 import { boundForContext, DEFAULT_MAX_EXTRACT_CHARS } from './bound-text.js';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -135,13 +137,24 @@ export class MediaService implements Service {
     return { provider, model, apiKey, baseUrl: this.config.providers?.[provider]?.baseUrl };
   }
 
+  /** Custom provider names (self-hosted OpenAI-compatible endpoints, e.g. a local
+   *  Whisper server) fall back to the OpenAI implementation — the caller already
+   *  resolved an auth key + baseUrl for the provider from config. */
+  private mediaProvider(name: string): MediaProvider {
+    try {
+      return createProvider(name);
+    } catch {
+      return new OpenAIProvider();
+    }
+  }
+
   private async transcribeAudio(params: { filePath: string }): Promise<{ text: string }> {
     const audioRef = this.config.agent?.media?.audio;
     if (!audioRef) throw new Error('No audio model configured (agent.media.audio)');
 
     const { provider, model, apiKey, baseUrl } = this.resolveProviderConfig(audioRef);
     const text = await this.cache.get(params.filePath, 'transcribe', () =>
-      createProvider(provider).transcribeAudio(params.filePath, model, apiKey, baseUrl),
+      this.mediaProvider(provider).transcribeAudio(params.filePath, model, apiKey, baseUrl),
     );
     const bounded = await boundForContext(text, `${params.filePath}.transcript.txt`, this.maxExtractChars(), 'transcript');
     return { text: bounded };
@@ -153,7 +166,7 @@ export class MediaService implements Service {
 
     const { provider, model, apiKey, baseUrl } = this.resolveProviderConfig(imgRef);
     const description = await this.cache.get(params.filePath, 'describe', () =>
-      createProvider(provider).describeImage(params.filePath, model, apiKey, baseUrl),
+      this.mediaProvider(provider).describeImage(params.filePath, model, apiKey, baseUrl),
     );
     return { description };
   }
