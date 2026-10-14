@@ -2,6 +2,13 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.4.2] - 2026-10-14
+
+### Fixed
+- **First boot no longer dies seeding the data dir on a filesystem boundary.** `fs.copyFile` is backed by `copy_file_range(2)`, which returns `EXDEV` when the destination sits on a different filesystem — the case when `~/.vargos` is an NFS mount bind-mounted into an LXC — and the kernel's own fallback then surfaced `EACCES` from `close(2)` on a destination that was plainly writable. `vargos start` aborted on the first bundled template with `EACCES: permission denied, copyfile … -> ~/.vargos/agent/mcp.json`. Seeding (`lib/templates.ts`) and channel-persona creation (`services/agent/persona.ts`) now retry with a plain read+write for the errnos that shape can produce; unrelated errors still propagate unchanged.
+
+[3.4.2]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.2
+
 ## [3.4.1] - 2026-10-01
 
 ### Fixed

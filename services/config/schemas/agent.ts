@@ -96,6 +96,9 @@ export const AgentConfigSchema = PiAgentSettingsSchema.extend({
   executionTimeoutMs: z.number().int().positive().optional().default(300 * 60 * 1000).describe('Max execution time for agent tasks in milliseconds. Default is 5 hours (300 minutes).'),
   media: z.object({
     audio: z.string().optional(),
+    tts: z.string().optional().describe('Speech synthesis model ref as "provider:model" (e.g. "voicestudio:tts-1-hd"). OpenAI-compatible /v1/audio/speech endpoint.'),
+    voice: z.string().optional().describe('Default TTS voice (provider-specific voice id, e.g. a VoiceStudio voice profile).'),
+    duplex: z.enum(['half', 'full']).optional().default('half').describe('STS duplex mode. half = sequential turn (STT -> agent -> TTS); full = barge-in capable (reserved for call surfaces).'),
     image: z.string().optional(),
     maxExtractChars: z.number().int().positive().optional().describe('Max characters of extracted media text (documents, audio transcripts) injected into the agent context. Over the limit the full text is saved next to the file and only the head is injected. Default 100000 (~25k tokens), tune down for small-context models.'),
   }).optional(),
