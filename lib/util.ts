@@ -1,6 +1,7 @@
 /** Small generic utilities. */
 
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -58,4 +59,34 @@ export function stripMarkdown(text: string): string {
     .replace(/^>\s?/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** Errno values from a copy_file_range(2)-backed copy that a plain read+write can recover from. */
+const COPYFILE_FALLBACK_CODES = new Set([
+  'EXDEV', // cross-device link — the destination is on a different filesystem
+  'EACCES',
+  'EPERM', // surface from close(2) on the destination even when the write succeeded
+  'EOPNOTSUPP',
+  'ENOTSUP',
+  'EINVAL', // filesystem does not implement the operation
+]);
+
+/**
+ * Copy a file, falling back to read+write when a direct copy cannot cross filesystems.
+ *
+ * `fs.copyFile` is backed by copy_file_range(2). When src and dest live on different filesystems —
+ * a local disk into an NFS-backed data dir, for instance one bind-mounted into an LXC — that
+ * syscall fails with EXDEV, and the kernel's own fallback can then report EACCES/EPERM from
+ * close(2) on a destination that is plainly writable. Seeding a fresh `~/.vargos` is exactly that
+ * case, and it made `vargos start` die on the first template. A read+write always works there, so
+ * retry with it. Errors that do not look like that failure propagate untouched.
+ */
+export async function copyFileResilient(src: string, dest: string): Promise<void> {
+  try {
+    await copyFile(src, dest);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (!code || !COPYFILE_FALLBACK_CODES.has(code)) throw err;
+    await writeFile(dest, await readFile(src));
+  }
 }

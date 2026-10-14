@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseFrontmatter } from '../../lib/frontmatter.js';
 import { getDataPaths } from '../../lib/paths.js';
 import { createLogger } from '../../lib/logger.js';
+import { copyFileResilient } from '../../lib/util.js';
 
 const log = createLogger('agent-persona');
 
@@ -94,7 +95,7 @@ async function ensureChannelPersonaFiles(channelIds: string[]): Promise<string[]
   for (const id of channelIds) {
     const file = path.join(agentsDir, `${id}.md`);
     if (!existsSync(file)) {
-      await fs.copyFile(defaultFile, file);
+      await copyFileResilient(defaultFile, file);
       log.info(`[persona:${id}] seeded file=${file}`);
     }
     files.push(file);

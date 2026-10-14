@@ -2,6 +2,7 @@ import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDataPaths } from './paths.js';
+import { copyFileResilient } from './util.js';
 
 // Seeding is always copy-missing (user edits preserved). "Managed" templates are additionally
 // offered for update by `vargos sync` when the bundled version changes — the user picks which to
@@ -56,7 +57,7 @@ async function differs(src: string, dest: string): Promise<boolean> {
 
 async function copy(file: TemplateFile): Promise<void> {
   await fs.mkdir(path.dirname(file.dest), { recursive: true });
-  await fs.copyFile(file.src, file.dest);
+  await copyFileResilient(file.src, file.dest);
 }
 
 /**
