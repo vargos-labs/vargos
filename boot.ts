@@ -13,6 +13,8 @@ import { discoverServices } from './core/services.js';
 import { discoverEdgeServices } from './core/edges.js';
 import { startRpcServer } from './core/rpc-server.js';
 import { createLogger } from './lib/logger.js';
+import { permissionHint } from './lib/error.js';
+import { getDataPaths } from './lib/paths.js';
 import { seedDataDir } from './lib/templates.js';
 import { runMigrations } from './lib/migrate.js';
 import { reportProblems } from './scripts/doctors/index.js';
@@ -64,7 +66,15 @@ bus.register('bus.restartProcess', {
 
 // ── Boot sequence ───────────────────────────────────────────────────────────────
 
-await seedDataDir(log);
+try {
+  await seedDataDir(log);
+} catch (err) {
+  // Unwritable data dir: name the cause + the fix rather than dying on a raw stack.
+  const hint = permissionHint(err, getDataPaths().dataDir);
+  if (!hint) throw err;
+  log.error(hint);
+  process.exit(1);
+}
 await runMigrations(log);
 await reportProblems(log); // advisory only — a missing prerequisite must never block boot
 

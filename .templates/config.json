@@ -12,19 +12,7 @@
   "agent": {
     "executionTimeoutMs": 18e6
   },
-  "channels": [
-    {
-      "id": "telegram-vargos-template",
-      "enabled": true,
-      "allowFrom": [
-        "1111111111",
-        "2222222222"
-      ],
-      "cwd": "~/",
-      "type": "telegram",
-      "botToken": "xxxxxxxxxx:Xxxxxxxxxxxxx-Xxxxxxxxxxxxxxxxxxxxx"
-    }
-  ],
+  "channels": [],
   "webhooks": [],
   "linkExpand": {
     "enabled": true,

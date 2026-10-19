@@ -1,93 +1,58 @@
 /**
  * LLM provider configuration — the one required piece of first-run setup.
  *
- * Writes the three files services/config reads: agent/models.json (provider
- * registry), agent/auth.json (credentials), agent/settings.json (defaultProvider
- * + defaultModel). The caller never sees three files — one Q&A fills all of them.
+ * Writes the files services/config + the agent read: agent/auth.json (credentials),
+ * agent/settings.json (defaultProvider + defaultModel), and — only for a local /
+ * OpenAI-compatible endpoint — agent/models.json. The caller never sees three files —
+ * one Q&A fills all of them.
+ *
+ * Hosted providers come from Pi SDK's built-in catalog (API type, base URL, model list),
+ * so nothing here can drift from what the daemon actually runs. Before saving, one tiny
+ * test request goes through the same Pi model runtime the agent uses — setup only says
+ * "ready" once a real reply came back (or the user explicitly chose to skip the check).
  *
  * Shared by the first-run journey (cli/ready.ts) and `vargos config` (cli/config-menu.ts).
  */
 
 import { existsSync } from 'node:fs';
 import * as p from '@clack/prompts';
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { getDataPaths } from '../lib/paths.js';
 import { readJson, writeJson } from '../lib/util.js';
+import { classifyError, sanitizeError, toMessage, type ErrorClass } from '../lib/error.js';
 
-interface ProviderPreset {
-  baseUrl: string;
-  /** Pi SDK API type. */
-  api: string;
-  models?: Array<{ id: string; name: string }>;
-  /** Env var checked for the key before prompting. */
-  envKey?: string;
-  /** Local providers don't need a key. */
-  local?: boolean;
+interface HostedProvider {
+  label: string;
+  /** Env var Pi SDK reads for this provider's key (see pi-ai env-api-keys). */
+  envKey: string;
+  /** Pre-selected model; falls back to the catalog when Pi no longer ships it. */
+  recommended: string;
 }
 
-export const PROVIDERS: Record<string, ProviderPreset> = {
-  anthropic: {
-    baseUrl: 'https://api.anthropic.com/v1',
-    api: 'anthropic',
-    models: [
-      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
-    ],
-    envKey: 'ANTHROPIC_API_KEY',
-  },
-  openai: {
-    baseUrl: 'https://api.openai.com/v1',
-    api: 'openai-completions',
-    models: [
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      { id: 'o3', name: 'o3' },
-    ],
-    envKey: 'OPENAI_API_KEY',
-  },
-  google: {
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    api: 'openai-completions',
-    models: [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-    ],
-    envKey: 'GOOGLE_API_KEY',
-  },
-  openrouter: {
-    baseUrl: 'https://openrouter.ai/api/v1',
-    api: 'openai-completions',
-    models: [
-      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (OpenRouter)' },
-      { id: 'openai/gpt-4o', name: 'GPT-4o (OpenRouter)' },
-    ],
-    envKey: 'OPENROUTER_API_KEY',
-  },
-  deepseek: {
-    baseUrl: 'https://api.deepseek.com/v1',
-    api: 'openai-completions',
-    models: [
-      { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-      { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
-    ],
-    envKey: 'DEEPSEEK_API_KEY',
-  },
-  groq: {
-    baseUrl: 'https://api.groq.com/openai/v1',
-    api: 'openai-completions',
-    models: [
-      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
-      { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill 70B' },
-    ],
-    envKey: 'GROQ_API_KEY',
-  },
-  ollama: {
-    baseUrl: 'http://localhost:11434/v1',
-    api: 'openai-completions',
-    models: [{ id: 'llama3.2', name: 'Llama 3.2' }],
-    local: true,
-  },
+/** Hosted providers offered by the wizard. Everything else about them comes from Pi's catalog. */
+export const HOSTED: Record<string, HostedProvider> = {
+  anthropic: { label: 'Anthropic', envKey: 'ANTHROPIC_API_KEY', recommended: 'claude-sonnet-5-5' },
+  openai: { label: 'OpenAI', envKey: 'OPENAI_API_KEY', recommended: 'gpt-5.5' },
+  google: { label: 'Google Gemini', envKey: 'GEMINI_API_KEY', recommended: 'gemini-3.5-flash' },
+  openrouter: { label: 'OpenRouter', envKey: 'OPENROUTER_API_KEY', recommended: 'anthropic/claude-sonnet-5' },
+  xai: { label: 'xAI', envKey: 'XAI_API_KEY', recommended: 'grok-4.7' },
+  mistral: { label: 'Mistral', envKey: 'MISTRAL_API_KEY', recommended: 'mistral-large-latest' },
+  deepseek: { label: 'DeepSeek', envKey: 'DEEPSEEK_API_KEY', recommended: 'deepseek-v4-pro' },
+  groq: { label: 'Groq', envKey: 'GROQ_API_KEY', recommended: 'openai/gpt-oss-120b' },
 };
+
+/** Plain-language lead-in for a failed test request; the provider's own message follows. */
+const FAILURE_REASON: Partial<Record<ErrorClass, string>> = {
+  auth: 'The provider rejected the API key.',
+  rate_limit: 'Rate-limited or out of credit on this account.',
+  timeout: 'No reply in time — check your network or the endpoint URL.',
+  transient: "Couldn't reach the provider — check your network or the endpoint URL.",
+  capability: "This model isn't available to your account.",
+};
+
+const LOCAL = '__local__';
+const LOCAL_DEFAULT_URL = 'http://localhost:11434/v1';
+const TEST_TIMEOUT_MS = 30_000;
 
 interface ModelsFile {
   providers?: Record<
@@ -100,130 +65,276 @@ interface SettingsFile {
   defaultModel?: string;
 }
 
+function agentFiles() {
+  const { agentAuthFile, agentModelsFile, agentSettingsFile } = getDataPaths();
+  return { auth: agentAuthFile, models: agentModelsFile, settings: agentSettingsFile };
+}
+
+/** The hosted provider whose key is already in the environment, if any. */
+export function envProvider(): string | undefined {
+  return Object.keys(HOSTED).find(id => process.env[HOSTED[id].envKey]);
+}
+
 /**
  * Cheap, side-effect free: does `~/.vargos/agent/` name a default provider + model
- * that could actually run? Deliberately permissive — the daemon does the real
- * validation on boot. It only needs to be sure the setup journey isn't sending a
- * working install back through the wizard.
+ * that could actually run? Deliberately permissive — the setup check (`testModel`) and
+ * the daemon do the real validation. It only needs to be sure the setup journey isn't
+ * sending a working install back through the wizard.
  */
 export function providerReady(): boolean {
-  const { configFile, dataDir } = getDataPaths();
+  const { configFile } = getDataPaths();
   if (!existsSync(configFile)) return false;
 
-  const agentDir = `${dataDir}/agent`;
-  const settings = readJson<SettingsFile>(`${agentDir}/settings.json`);
+  const files = agentFiles();
+  const settings = readJson<SettingsFile>(files.settings);
   const provider = settings?.defaultProvider;
-
   if (!provider || !settings?.defaultModel) return false;
 
-  // Credentials can live in any of three places, and a provider need not appear
-  // in the user's models.json at all — Pi SDK ships built-ins (anthropic, openai,
-  // google, deepseek, …) that only need an auth.json entry.
-  const models = readJson<ModelsFile>(`${agentDir}/models.json`);
-  const entry = models?.providers?.[provider];
-  if (entry?.apiKey) return true;                       // inline key in models.json
+  // Credentials can live in three places: inline in models.json, auth.json, or the env.
+  const entry = readJson<ModelsFile>(files.models)?.providers?.[provider];
+  if (entry?.apiKey) return true;
+  if (readJson<Record<string, unknown>>(files.auth)?.[provider]) return true;
+  if (HOSTED[provider] && process.env[HOSTED[provider].envKey]) return true;
 
-  const auth = readJson<Record<string, unknown>>(`${agentDir}/auth.json`);
-  if (auth?.[provider]) return true;                    // credentials in auth.json
-
-  const preset = PROVIDERS[provider];
-  if (preset?.local) return true;                       // local preset — no key needed
-  if (preset?.envKey && process.env[preset.envKey]) return true; // key in the env
-
-  // A provider the user declared in models.json (with a baseUrl) but no visible
-  // key — trust it; the daemon does the real validation on boot.
+  // A provider the user declared in models.json (local endpoints often need no key).
   return !!entry;
+}
+
+/** Pi's model runtime over this data dir — the exact object the agent service builds. */
+async function loadRuntime(): Promise<ModelRuntime> {
+  const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+  const files = agentFiles();
+  return ModelRuntime.create({ authPath: files.auth, modelsPath: files.models });
+}
+
+/**
+ * Send one tiny request through Pi with the saved config. Null on success, otherwise a
+ * short, key-free reason to show the user.
+ */
+export async function testModel(provider: string, modelId: string): Promise<string | null> {
+  try {
+    const runtime = await loadRuntime();
+    const model = runtime.getModel(provider, modelId);
+    if (!model) return `"${provider}/${modelId}" is not a known model`;
+
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`no reply within ${TEST_TIMEOUT_MS / 1000}s`)), TEST_TIMEOUT_MS);
+    });
+    const reply = await Promise.race([
+      runtime.completeSimple(
+        model,
+        { messages: [{ role: 'user', content: 'Reply with the single word OK.', timestamp: Date.now() }] },
+        { maxTokens: 64 },
+      ),
+      timeout,
+    ]).finally(() => clearTimeout(timer));
+
+    return reply.stopReason === 'error' ? sanitizeError(reply.errorMessage ?? 'unknown error') : null;
+  } catch (err) {
+    return sanitizeError(toMessage(err));
+  }
 }
 
 function unwrap<T>(v: T | symbol): T {
   if (p.isCancel(v)) {
-    p.cancel('Setup cancelled — run "vargos" to resume.');
+    p.cancel('Setup cancelled — run "vargos setup" to resume.');
     process.exit(0);
   }
   return v as T;
 }
 
+function saveAuth(provider: string, key: string): void {
+  const file = agentFiles().auth;
+  const auth = readJson<Record<string, unknown>>(file) ?? {};
+  auth[provider] = { type: 'api_key', key };
+  writeJson(file, auth);
+}
+
+function saveDefault(provider: string, model: string): void {
+  const { configFile } = getDataPaths();
+  if (!existsSync(configFile)) writeJson(configFile, { gateway: {} });
+  const file = agentFiles().settings;
+  const settings = readJson<SettingsFile>(file) ?? {};
+  settings.defaultProvider = provider;
+  settings.defaultModel = model;
+  writeJson(file, settings);
+}
+
+/** Catalog models for a provider — recommended first, newest-looking next. */
+async function catalogModels(provider: string): Promise<string[]> {
+  const ids = (await loadRuntime()).getModels().filter(m => m.provider === provider).map(m => m.id).reverse();
+  const rec = HOSTED[provider]?.recommended;
+  return rec && ids.includes(rec) ? [rec, ...ids.filter(id => id !== rec)] : ids;
+}
+
+async function pickModel(ids: string[], current?: string): Promise<string> {
+  const OTHER = '__other__';
+  const choice = ids.length
+    ? unwrap(await p.autocomplete({
+      message: 'Default model (type to filter)',
+      options: [...ids.map(id => ({ value: id, label: id })), { value: OTHER, label: 'Other — type a model ID' }],
+      initialValue: current && ids.includes(current) ? current : ids[0],
+      maxItems: 8,
+    })) as string
+    : OTHER;
+  if (choice !== OTHER) return choice;
+  return unwrap(await p.text({
+    message: 'Model ID',
+    placeholder: 'e.g. llama3.2',
+    validate: v => (v ? undefined : 'Required'),
+  })) as string;
+}
+
+/** Run the test request behind a spinner; on failure, ask what to change ('ok' = save anyway). */
+async function verify(provider: string, model: string): Promise<'ok' | 'key' | 'model'> {
+  const spin = p.spinner();
+  spin.start(`Testing ${provider} · ${model}`);
+  const failure = await testModel(provider, model);
+  if (!failure) {
+    spin.stop(`${provider} · ${model} — replied`);
+    return 'ok';
+  }
+  spin.error(`${provider} · ${model} — test request failed`);
+  const reason = FAILURE_REASON[classifyError(failure)];
+  p.log.error(reason ? `${reason}\n${failure}` : failure);
+
+  return unwrap(await p.select({
+    message: 'What now?',
+    options: [
+      { value: 'key', label: 'Re-enter the API key / endpoint' },
+      { value: 'model', label: 'Pick a different model' },
+      { value: 'ok', label: 'Save it anyway', hint: 'e.g. offline right now' },
+    ],
+  })) as 'ok' | 'key' | 'model';
+}
+
+async function configureHosted(provider: string, currentModel?: string): Promise<string> {
+  const { label, envKey } = HOSTED[provider];
+  let askKey = true;
+  for (;;) {
+    if (askKey) {
+      const fromEnv = process.env[envKey];
+      if (fromEnv) p.log.info(`Using ${envKey} from the environment.`);
+      const key = fromEnv ?? unwrap(await p.password({
+        message: `${label} API key`,
+        validate: v => (v ? undefined : 'Required'),
+      })) as string;
+      // Saved before the test so it runs on exactly what the daemon will read.
+      saveAuth(provider, key);
+    }
+    const model = await pickModel(await catalogModels(provider), currentModel);
+    const next = await verify(provider, model);
+    if (next === 'ok') return model;
+    // An env key can't be "re-entered" here — say where it comes from instead of looping on it.
+    if (next === 'key' && process.env[envKey]) {
+      p.log.warn(`The key comes from ${envKey} — fix or unset it, then run "vargos setup" again.`);
+      process.exit(1);
+    }
+    askKey = next === 'key';
+  }
+}
+
+/** List model IDs from an OpenAI-compatible `/models` endpoint. */
+async function listRemoteModels(baseUrl: string, apiKey?: string): Promise<string[]> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${baseUrl}/models`);
+  const body = await res.json() as { data?: Array<{ id: string }> };
+  return (body.data ?? []).map(m => m.id);
+}
+
+async function configureLocal(): Promise<{ provider: string; model: string }> {
+  for (;;) {
+    const provider = unwrap(await p.text({
+      message: 'Name for this endpoint',
+      placeholder: 'ollama',
+      defaultValue: 'ollama',
+      validate: v => (!v || /^[a-z0-9_-]+$/.test(v) ? undefined : 'lowercase letters, numbers, - and _ only'),
+    })) as string;
+    const baseUrl = unwrap(await p.text({
+      message: 'Base URL (OpenAI-compatible, usually ends in /v1)',
+      placeholder: LOCAL_DEFAULT_URL,
+      defaultValue: LOCAL_DEFAULT_URL,
+    })) as string;
+    const apiKey = unwrap(await p.password({ message: 'API key (Enter to skip if none)' })) as string || undefined;
+
+    let ids: string[] = [];
+    try {
+      ids = await listRemoteModels(baseUrl, apiKey);
+    } catch (err) {
+      p.log.warn(`Couldn't list models at ${baseUrl}: ${sanitizeError(toMessage(err))}`);
+    }
+
+    for (;;) {
+      const model = await pickModel(ids);
+      const file = agentFiles().models;
+      const models = readJson<ModelsFile>(file) ?? {};
+      models.providers = {
+        ...models.providers,
+        [provider]: {
+          baseUrl,
+          api: 'openai-completions',
+          // Pi treats a provider without any key as "not configured"; keyless local servers
+          // ignore the Authorization header, so a placeholder satisfies both.
+          apiKey: apiKey ?? 'local',
+          models: (ids.length ? ids : [model]).map(id => ({ id, name: id })),
+        },
+      };
+      writeJson(file, models);
+
+      const next = await verify(provider, model);
+      if (next === 'ok') return { provider, model };
+      if (next === 'key') break; // back to name / URL / key
+    }
+  }
+}
+
 /**
- * Interactive provider setup. Writes all three files. Returns the chosen
- * provider + model. `reconfigure` pre-selects from the current settings.
+ * Interactive provider setup. Returns the chosen provider + model once it answered a
+ * test request (or the user explicitly saved it untested).
  */
 export async function configureProvider(): Promise<{ provider: string; model: string }> {
-  const { configFile, dataDir } = getDataPaths();
-  const agentDir = `${dataDir}/agent`;
+  const current = readJson<SettingsFile>(agentFiles().settings);
+  const fromEnv = envProvider();
 
-  const providerKey = unwrap(await p.select({
+  const choice = unwrap(await p.select({
     message: 'LLM provider',
-    options: Object.entries(PROVIDERS).map(([key, preset]) => ({
-      value: key,
-      label: preset.local ? `${key} (local)` : key,
-      hint: preset.baseUrl,
-    })),
+    initialValue: current?.defaultProvider && HOSTED[current.defaultProvider] ? current.defaultProvider : fromEnv ?? 'anthropic',
+    options: [
+      ...Object.entries(HOSTED).map(([id, h]) => ({
+        value: id,
+        label: h.label,
+        hint: process.env[h.envKey] ? `${h.envKey} found` : undefined,
+      })),
+      { value: LOCAL, label: 'Local / OpenAI-compatible', hint: 'Ollama, LM Studio, vLLM, llama.cpp…' },
+    ],
   })) as string;
 
-  const preset = PROVIDERS[providerKey];
+  const { provider, model } = choice === LOCAL
+    ? await configureLocal()
+    : { provider: choice, model: await configureHosted(choice, current?.defaultProvider === choice ? current.defaultModel : undefined) };
 
-  // Credentials — env var wins, otherwise prompt (skip for local).
-  let apiKey: string | undefined;
-  if (preset.envKey && process.env[preset.envKey]) {
-    p.log.info(`Using ${preset.envKey} from the environment.`);
-    apiKey = process.env[preset.envKey];
-  } else if (!preset.local) {
-    apiKey = unwrap(await p.password({
-      message: `${providerKey} API key`,
-      validate: (v) => (v ? undefined : 'Required'),
-    })) as string;
-  }
+  saveDefault(provider, model);
+  return { provider, model };
+}
 
-  // Base URL — only asked for local (where it varies).
-  let baseUrl = preset.baseUrl;
-  if (preset.local) {
-    baseUrl = (unwrap(await p.text({
-      message: `${providerKey} base URL`,
-      placeholder: preset.baseUrl,
-      defaultValue: preset.baseUrl,
-    })) as string) || preset.baseUrl;
-  }
-
-  // Model.
-  let model: string;
-  if (preset.models?.length) {
-    model = unwrap(await p.select({
-      message: 'Default model',
-      options: preset.models.map((m) => ({ value: m.id, label: m.name })),
-    })) as string;
-  } else {
-    model = unwrap(await p.text({
-      message: 'Model ID',
-      placeholder: 'e.g. gpt-4o',
-      validate: (v) => (v ? undefined : 'Required'),
-    })) as string;
-  }
-
-  // ── Write all three files ────────────────────────────────────────────────
-  const spin = p.spinner();
-  spin.start('Writing configuration');
-
-  if (!existsSync(configFile)) writeJson(configFile, { gateway: {} });
-
-  const models = readJson<ModelsFile>(`${agentDir}/models.json`) ?? {};
-  models.providers = {
-    ...models.providers,
-    [providerKey]: { baseUrl, api: preset.api, ...(preset.models ? { models: preset.models } : {}) },
-  };
-  writeJson(`${agentDir}/models.json`, models);
-
-  if (apiKey) {
-    const auth = readJson<Record<string, unknown>>(`${agentDir}/auth.json`) ?? {};
-    auth[providerKey] = { type: 'api_key', key: apiKey };
-    writeJson(`${agentDir}/auth.json`, auth);
-  }
-
-  // settings.json — derived, never a separate prompt.
-  const settings = readJson<SettingsFile>(`${agentDir}/settings.json`) ?? {};
-  settings.defaultProvider = providerKey;
-  settings.defaultModel = model;
-  writeJson(`${agentDir}/settings.json`, settings);
-
-  spin.stop(`${providerKey} · ${model}`);
-  return { provider: providerKey, model };
+/**
+ * Headless setup from an env key (docker, systemd): pick that provider's recommended
+ * model, save, and test. Returns the failure reason, or null once it works. Undefined
+ * when no known provider key is in the environment.
+ */
+export async function configureFromEnv(): Promise<string | null | undefined> {
+  const provider = envProvider();
+  if (!provider) return undefined;
+  const [model] = await catalogModels(provider);
+  if (!model) return `Pi SDK ships no models for "${provider}"`;
+  saveAuth(provider, process.env[HOSTED[provider].envKey]!);
+  const failure = await testModel(provider, model);
+  if (failure) return `${provider} · ${model}: ${failure}`;
+  // Only a working provider becomes the default — a failed test leaves the install "not ready".
+  saveDefault(provider, model);
+  return null;
 }

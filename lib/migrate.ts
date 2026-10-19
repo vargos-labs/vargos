@@ -11,6 +11,7 @@ import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getDataPaths, type DataPaths } from './paths.js';
+import { permissionHint } from './error.js';
 
 export interface MigrationContext {
   paths: DataPaths;
@@ -84,7 +85,8 @@ export async function applyMigrations(
       justApplied.push(m.id);
       ctx.log.info(`✅ migration ${m.id} applied`);
     } catch (err) {
-      ctx.log.warn(`migration ${m.id} failed (retries next run): ${err instanceof Error ? err.message : String(err)}`);
+      const reason = permissionHint(err, ctx.paths.dataDir) ?? (err instanceof Error ? err.message : String(err));
+      ctx.log.warn(`migration ${m.id} failed (retries next run): ${reason}`);
       break;
     }
   }
