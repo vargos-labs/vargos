@@ -102,7 +102,8 @@ export class MemoryPostgresStorage implements MemoryStorage {
              content = EXCLUDED.content,
              start_line = EXCLUDED.start_line,
              end_line = EXCLUDED.end_line,
-             metadata = EXCLUDED.metadata`,
+             metadata = EXCLUDED.metadata,
+             embedding = NULL`,
           [chunk.id, chunk.path, chunk.content, chunk.startLine, chunk.endLine, JSON.stringify(chunk.metadata)],
         );
       } else {
@@ -154,6 +155,7 @@ export class MemoryPostgresStorage implements MemoryStorage {
     embedding: number[],
     limit: number,
     minScore?: number,
+    identity?: string,
   ): Promise<Array<{ chunk: MemoryChunk; score: number }>> {
     let res;
     try {
@@ -161,9 +163,11 @@ export class MemoryPostgresStorage implements MemoryStorage {
         `SELECT *, 1 - (embedding <=> $1::text::vector) AS score
          FROM ${this.cTable}
          WHERE embedding IS NOT NULL
+           AND ($3::text IS NULL OR metadata->>'embeddingIdentity' = $3)
+           AND vector_dims(embedding) = $4
          ORDER BY embedding <=> $1::text::vector
          LIMIT $2`,
-        [MemoryPostgresStorage.toVectorText(embedding), limit],
+        [MemoryPostgresStorage.toVectorText(embedding), limit, identity ?? null, embedding.length],
       );
     } catch (err) {
       if (/dimensions/i.test(String(err)) && !this.dimensionMismatchWarned) {
@@ -191,6 +195,21 @@ export class MemoryPostgresStorage implements MemoryStorage {
       embedding: raw ? JSON.parse(raw) : undefined,
       metadata:  row.metadata as MemoryChunk['metadata'],
     };
+  }
+
+  async clear(): Promise<void> {
+    const client = await this.pool!.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM ${this.cTable}`);
+      await client.query(`DELETE FROM ${this.fTable}`);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async close(): Promise<void> {

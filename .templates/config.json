@@ -12,6 +12,9 @@
   "agent": {
     "executionTimeoutMs": 18e6
   },
+  "memory": {
+    "provider": "keyword"
+  },
   "channels": [],
   "webhooks": [],
   "linkExpand": {

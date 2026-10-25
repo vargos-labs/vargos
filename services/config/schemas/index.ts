@@ -52,3 +52,7 @@ export type { McpClientConfig, McpServerConfig } from './mcp.js';
 // Storage
 export { StorageConfigSchema } from './storage.js';
 export type { StorageConfig } from './storage.js';
+
+// Memory
+export { MemoryConfigSchema, resolveMemoryConfig } from './memory.js';
+export type { MemoryConfig } from './memory.js';

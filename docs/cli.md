@@ -18,7 +18,7 @@ one-shot.
 | `vargos setup` | The one folded first-run command: seed → migrate → provider setup → environment check → (fresh only) offer channels. Idempotent; safe to re-run. |
 | `vargos` | Runs `setup` automatically when the install isn't ready; otherwise prints usage. |
 | `vargos start` | Boot the daemon: bus + all services + JSON-RPC `:9000`. Runs `setup` first *only* when unconfigured (fresh / empty); a normal restart boots straight through. Long-running. |
-| `vargos config` | Interactive editor — change provider/model, add a channel, re-check the environment, run pending migrations. `vargos config show` (or `get`) prints the merged config as JSON. |
+| `vargos config` | Interactive editor — change provider/model, configure memory search/embeddings, add a channel, re-check the environment, run pending migrations. `vargos config show` (or `get`) prints the merged config as JSON. |
 | `vargos chat` | Hand off to the pi coding-agent REPL bound to `~/.vargos/agent`. The interactive way to talk to the agent. |
 | `vargos sync` | Diff bundled `.templates/` against `~/.vargos/`, prompt to overwrite. |
 | `vargos --version` / `-v` | Print version. |
@@ -58,6 +58,7 @@ journey and reported advisory-only on `vargos start` / `vargos chat`.
 | `memory search` | `<query>` `[--maxResults --minScore]` | results | 🟢 |
 | `memory read` | `<path>` `[--from --lines]` | file content | 🟢 |
 | `memory write` | `<path> <content>` `[--mode]` | write ack | 🟢 |
+| `memory reindex` | — | remove stale entries and rebuild the index using current memory settings | 🟢 |
 | `memory stats` | — | index stats | 🟢 |
 | `web fetch` | `<url>` | `{text}` | 🟢 |
 | `webhook list` | `[query]` `[--page] [--limit]` | endpoints | 🟢 |

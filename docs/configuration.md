@@ -4,7 +4,7 @@ Vargos splits config across **five files** under `~/.vargos/`. The split keeps s
 
 | File | Purpose | Schema |
 |---|---|---|
-| `config.json` | App config: channels, cron, webhooks, gateway | [`services/config/index.ts`](../services/config/index.ts) `AppConfigSchema` |
+| `config.json` | App config: memory, channels, cron, webhooks, gateway | [`services/config/index.ts`](../services/config/index.ts) `AppConfigSchema` |
 | `agent/mcp.json` | External MCP servers (shared with Pi SDK) | See [MCP](#mcp) |
 | `agent/models.json` | Provider definitions and model registry (Pi SDK owned) | [Pi SDK `ModelRegistry`](../node_modules/@earendil-works/pi-coding-agent/dist/core/model-registry.d.ts) |
 | `agent/settings.json` | Default model, thinking level, media providers | Pi SDK `SettingsManager` |
@@ -15,6 +15,88 @@ All four are `0o600` (owner-only). The config service merges them at runtime. Ov
 The `services/config/schemas/*` definitions are the **single source of truth**: they validate CLI,
 agent-tool, JSON-RPC, and web calls, and the CLI derives its flags/`--help` from them. Adding a key
 to a schema surfaces it on every surface at once — never hand-maintain a per-surface shape.
+
+## Memory search
+
+Run `vargos config` and choose **Configure memory search / embeddings** after installation.
+The menu saves a top-level `memory` section in `~/.vargos/config.json`, preserves other settings,
+and never starts indexing or sends requests while configuring.
+
+Default (no embedding API calls, local keyword matching):
+
+```json
+{
+  "memory": {
+    "provider": "keyword"
+  }
+}
+```
+
+OpenAI embeddings combined with keyword matching:
+
+```json
+{
+  "memory": {
+    "provider": "openai",
+    "key": "<your-embedding-api-key>",
+    "model": "text-embedding-3-small"
+  }
+}
+```
+
+Merge this section into your existing configuration. `key` is a dedicated embedding key,
+separate from the agent's inference credentials; the password prompt lets you retain the
+current key without displaying it. OpenAI requires a non-empty key. The model above is the
+default. `keyword` requires no key and disables embedding calls.
+
+For local Ollama embeddings:
+
+```json
+{
+  "memory": {
+    "provider": "ollama",
+    "baseUrl": "http://127.0.0.1:11434",
+    "model": "embeddinggemma"
+  }
+}
+```
+
+Start Ollama and install the embedding model first (`ollama pull embeddinggemma`). The menu
+prompts for the server URL and model when Ollama is selected. `baseUrl` defaults to the local
+Ollama server above; give the server root, without `/api/embed`. No key is needed for local
+Ollama. An optional `key` is sent as a Bearer token for an authenticated proxy. OpenAI also
+accepts an optional `baseUrl` (default `https://api.openai.com/v1`). Switching providers in
+the menu does not carry credentials or model names from the previous provider.
+The supported providers are `keyword`, `openai`, and `ollama`; `local` is not a provider name.
+
+Restart the daemon after saving. Each indexed chunk records an identity derived from the
+provider, model, and endpoint, excluding credentials. On startup, a different identity or
+an older unversioned index automatically clears the **derived index only** and rebuilds it
+from source Markdown files and supported session-history records. Source files remain intact.
+This handles model changes even when the old and new vectors have the same dimensions.
+Keyword/OpenAI/Ollama transitions are covered; rotating only the API key does not rebuild.
+The daemon finishes the startup rebuild before exposing memory search. Rebuilds may take time.
+
+Use `vargos memory reindex` for a manual rebuild, including after replacing the contents of an
+Ollama model under the same model name (which configuration-based identity cannot detect).
+OpenAI indexing sends text to OpenAI and incurs API usage; Ollama sends it to the configured
+Ollama server. Failed embedding requests log a warning and fall back to keyword matching;
+incompatible old vectors are never reused. Files with missing vectors are retried on later
+syncs. A completed reindex alone does not prove that vectors were generated.
+
+SQLite (the default storage) supports embeddings; Postgres is optional and remains configured
+separately under `storage`. Postgres similarity queries filter by embedding identity and
+vector dimension. Switching back to keyword search rebuilds the derived index without vectors.
+
+Optional settings in `memory`: `chunkSize` (default 400), `chunkOverlap` (default 80, smaller
+than `chunkSize`), and `hybridWeight` (default `{ "vector": 0.7, "text": 0.3 }`). Keyword
+matching scores query-term overlap; it is not ripgrep or BM25.
+
+Older `agent.memoryEmbeddingProvider`, `agent.memoryEmbeddingApiKey`,
+`agent.memoryEmbeddingModel`, chunk/weight settings, and their legacy root equivalents are
+still read when `memory` is absent. An explicit `memory` section takes precedence, including
+when keyword search is selected. The config menu writes the new format; no manual migration
+is required.
 
 ## Channels
 

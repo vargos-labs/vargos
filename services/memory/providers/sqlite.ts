@@ -81,6 +81,12 @@ export class MemorySQLiteStorage implements MemoryStorage {
     return { fileCount: f?.count ?? 0, chunkCount: c?.count ?? 0 };
   }
 
+  async clear(): Promise<void> {
+    this.db!.transaction(() => {
+      this.db!.exec('DELETE FROM chunks; DELETE FROM files;');
+    })();
+  }
+
   async close(): Promise<void> {
     this.db?.close();
     this.db = null;
