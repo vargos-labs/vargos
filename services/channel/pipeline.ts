@@ -83,11 +83,14 @@ export class InboundMessagePipeline {
     }
     const { allowFrom, cwd, model } = channelEntry;
 
+    const execute = shouldExecute(allowFrom, message.fromUserId, message.chatType, message.isMentioned);
+    if (!execute && channelEntry.sentryMode !== true) return;
+
     const content = message.text
       ? await expandLinks(message.text, this.config.linkExpand).catch(() => message.text!)
       : '';
 
-    if (!shouldExecute(allowFrom, message.fromUserId, message.chatType, message.isMentioned)) {
+    if (!execute) {
       this.observe(sessionKey, message, content, allowFrom);
       return;
     }

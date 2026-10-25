@@ -18,7 +18,7 @@ to a schema surfaces it on every surface at once — never hand-maintain a per-s
 
 ## Channels
 
-Each entry in `config.json#channels[]` matches [`services/config/schemas/channels.ts`](../services/config/schemas/channels.ts). Keys: `type` (`telegram` | `whatsapp`), `id` (unique instance id, used as sessionKey prefix), `enabled`, `model?` (per-channel override), `cwd?`, `debounceMs?`, `allowFrom?` (whitelist), plus `botToken` for telegram.
+Each entry in `config.json#channels[]` matches [`services/config/schemas/channels.ts`](../services/config/schemas/channels.ts). Keys: `type` (`telegram` | `whatsapp`), `id` (unique instance id, used as sessionKey prefix), `enabled`, `model?` (per-channel override), `cwd?`, `debounceMs?`, `allowFrom?` (whitelist), `sentryMode?` (default `false`; opt in to saving non-triggering messages and attachments), plus `botToken` for telegram.
 
 The old `instructionsFile` field has been removed — channel system-prompt overrides live in [persona files](./usage.md) at `~/.vargos/agents/<id>.md`.
 

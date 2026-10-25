@@ -34,6 +34,7 @@ import type {
   AdapterDeps,
 } from './types.js';
 import { shouldExecute } from './access.js';
+import { ChannelEntrySchema } from '../config/schemas/channels.js';
 import { deliverReply } from './delivery.js';
 import { extractMediaPaths } from './media-paths.js';
 import { WhatsAppPairing, type PairStatus } from './providers/whatsapp/pairing.js';
@@ -144,6 +145,7 @@ export class ChannelService implements Service {
         model: z.string().optional(),
         debounceMs: z.number().int().min(0).optional(),
         allowFrom: z.array(z.string()).optional(),
+        sentryMode: ChannelEntrySchema.options[0].shape.sentryMode,
         cwd: z.string().optional(),
         botToken: z.string().optional(),
       }),
@@ -382,6 +384,7 @@ export class ChannelService implements Service {
     return {
       onInbound: (sessionKey, message) => this.onInboundMessage(sessionKey, message),
       enrichMedia: (kind, filePath, mimeType) => this.enrichMedia(kind, filePath, mimeType),
+      shouldReceive: (m) => entry.sentryMode === true || shouldExecute(entry.allowFrom, m.fromUserId, m.chatType, m.isMentioned),
       shouldEnrich: (m) => shouldExecute(entry.allowFrom, m.fromUserId, m.chatType, m.isMentioned),
     };
   }

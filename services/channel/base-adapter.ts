@@ -69,6 +69,7 @@ export abstract class BaseChannelAdapter<TRaw = never> implements ChannelAdapter
     try {
       const msg = this.normalize(raw);
       if (!msg) return;
+      if (this.deps.shouldReceive && !this.deps.shouldReceive(msg)) return;
 
       // Chat-scoped: message ids are only unique within a chat on some platforms.
       if (!this.dedupe.add(`${msg.chatId}:${msg.messageId}`)) return;

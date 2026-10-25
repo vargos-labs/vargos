@@ -28,6 +28,7 @@ export function ChannelForm({
   const [id, setId] = useState("");
   const [type, setType] = useState("telegram");
   const [enabled, setEnabled] = useState(true);
+  const [sentryMode, setSentryMode] = useState(false);
   const [botToken, setBotToken] = useState("");
   const [model, setModel] = useState("");
   const [allowFrom, setAllowFrom] = useState("");
@@ -39,6 +40,7 @@ export function ChannelForm({
     setId(String(channel?.id ?? ""));
     setType(String(channel?.type ?? "telegram"));
     setEnabled(channel?.enabled ?? true);
+    setSentryMode(channel?.sentryMode ?? false);
     setBotToken(String((channel?.botToken as string) ?? ""));
     setModel(String((channel?.model as string) ?? ""));
     setAllowFrom(((channel?.allowFrom as string[]) ?? []).join(", "));
@@ -65,6 +67,7 @@ export function ChannelForm({
                 ...c,
                 type,
                 enabled,
+                sentryMode,
                 ...(model.trim() ? { model: model.trim() } : { model: undefined }),
                 ...(allow.length ? { allowFrom: allow } : { allowFrom: undefined }),
                 ...(cwd.trim() ? { cwd: cwd.trim() } : { cwd: undefined }),
@@ -81,6 +84,7 @@ export function ChannelForm({
         id: id.trim(),
         type: type.trim(),
         enabled,
+        sentryMode,
         ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
         ...(model.trim() ? { model: model.trim() } : {}),
         ...(allow.length ? { allowFrom: allow } : {}),
@@ -195,6 +199,10 @@ export function ChannelForm({
               />
             </Field>
           </div>
+
+          <FieldRow label="Sentry mode" hint="Save messages that do not trigger the agent, including attachments. Off by default.">
+            <Switch checked={sentryMode} onCheckedChange={setSentryMode} />
+          </FieldRow>
 
           <FieldRow label="Enabled" hint="Disabled channels stay in config but don't connect.">
             <Switch checked={enabled} onCheckedChange={setEnabled} />

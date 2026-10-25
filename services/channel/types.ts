@@ -56,6 +56,8 @@ export interface ChannelAdapter {
  */
 export interface AdapterDeps {
   onInbound: OnInboundMessageFn;
+  /** Drop ignored messages before debounce, media downloads, and persistence. */
+  shouldReceive?: (message: NormalizedInboundMessage) => boolean;
   /** Turn a saved media file into text: a transcript, a description, an extraction. */
   enrichMedia: (kind: MediaKind, filePath: string, mimeType: string) => Promise<string>;
   /** Whether enrichment is worth its cost — true when this message will run the agent. */

@@ -214,7 +214,9 @@ While the agent processes, the bot updates its message reactions: 👀 received 
 | user whitelisted | group | no | **Observe** |
 | user not whitelisted | any | any | **Observe** |
 
-"Observe" means the message is appended to session history via `agent.appendMessage` (so the agent has context later) but no LLM call is made. This applies to both text and media:
+By default, messages marked **Observe** above are discarded before media downloads, link expansion, or history writes. Set `sentryMode: true` on the channel to retain them.
+
+With sentry mode enabled, "Observe" means the message is appended to session history via `agent.appendMessage` (so the agent has context later) but no LLM call is made. This applies to both text and media:
 
 - **Text** — appended as-is to history
 - **Media** — file is saved to disk, appended to history as a file path only. Vision/transcription/extraction are **skipped** (no API calls). Before paying for enrichment the base adapter asks `shouldEnrich()`, which the channel service wires to the same `shouldExecute()` rule — so the enrichment decision and the execution decision can never disagree.
@@ -444,7 +446,7 @@ Look for the `model_change` entry.
 
 ### Whitelist / channel rejection
 
-If an inbound message doesn't trigger an agent run, check `allowFrom` on the channel entry. Non-whitelisted senders' messages are appended to history (observe-only path via `shouldExecute()`) but the agent isn't invoked. See [`services/channel/pipeline.ts`](../services/channel/pipeline.ts).
+If an inbound message doesn't trigger an agent run, check `allowFrom` on the channel entry. Non-whitelisted senders' messages are discarded by default. With `sentryMode: true`, they are appended to history without invoking the agent. See [`services/channel/pipeline.ts`](../services/channel/pipeline.ts).
 
 Group chats: bot only runs when @-mentioned or replied-to.
 

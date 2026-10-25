@@ -10,6 +10,7 @@ const ChannelBaseSchema = z.object({
   model:             z.string().optional(),                  // overrides agent.model for runs from this channel
   debounceMs:        z.number().int().min(0).optional(),
   allowFrom:         z.array(z.string()).optional(),
+  sentryMode:        z.boolean().optional().default(false), // retain messages that do not trigger execution
   cwd:               z.string().optional(),                  // working directory for agent sessions from this channel
 });
 

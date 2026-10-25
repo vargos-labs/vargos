@@ -53,7 +53,7 @@ describe('Whitelist + mention routing', () => {
     providers: { test: { baseUrl: 'http://localhost', apiKey: 'test', api: 'test', models: [] } },
     agent: { model: 'test:test' },
     // enabled: false → init() skips starting a real Telegram adapter; the mock is injected below.
-    channels: [{ id: 'telegram-vargos', type: 'telegram' as const, botToken: 'test-token', enabled: false, allowFrom: [WHITELISTED_USER_ID] }],
+    channels: [{ id: 'telegram-vargos', type: 'telegram' as const, botToken: 'test-token', enabled: false, sentryMode: true, allowFrom: [WHITELISTED_USER_ID] }],
     webhooks: [], linkExpand: {}, mcp: {}, paths: {}, gateway: { port: 9000 },
   } as unknown as AppConfig;
 
