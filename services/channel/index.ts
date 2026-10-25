@@ -73,6 +73,12 @@ export class ChannelService implements Service {
 
     this.registerMethods(bus);
     bus.on('agent.onTool', (p: AgentToolPayload) => this.pipeline.onTool(p));
+    bus.on('agent.onProgress', async ({ sessionKey, text }: { sessionKey: string; text: string }) => {
+      try {
+        // Progress is informational: bypass channel.send's final-reply tracking.
+        await deliverReply(chunk => this.adapterFor(sessionKey).send(sessionKey, chunk), stripMarkdown(text));
+      } catch (error) { log.warn(`progress send failed: ${toMessage(error)}`); }
+    });
     bus.on('agent.onCompleted', (p: AgentCompletedPayload) => this.pipeline.onCompleted(p));
 
     for (const provider of await loadProviders(PROVIDERS)) {

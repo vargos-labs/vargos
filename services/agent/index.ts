@@ -429,10 +429,28 @@ export class AgentService implements Service {
    * Subscribe to PiAgent sessionsubscription - emit to bus for streaming + debug logging.
    */
   protected subscribeToSessionEvents(session: AgentSession, sessionKey: string): void {
+    let lastProgressAt: number | undefined;
+    let latestCommentary = '';
+    let lastSentCommentary = '';
+    const progress = () => {
+      const text = truncate(latestCommentary.trim(), 400);
+      const now = Date.now();
+      if (lastProgressAt === undefined || now - lastProgressAt < 90_000 || !text || text === lastSentCommentary) return;
+      if (isSubagentSession(sessionKey) || !this.config.channels.some(c => c.id === parseSessionKey(sessionKey).type)) return;
+      lastProgressAt = now;
+      lastSentCommentary = text;
+      latestCommentary = '';
+      this.bus.emit('agent.onProgress', { sessionKey, text });
+    };
     session.subscribe((event: AgentSessionEvent) => {
       // Switching on event.type directly lets TypeScript narrow the union per-case,
       // so each branch can access typed fields without casting.
       switch (event.type) {
+        case 'agent_start':
+          lastProgressAt = Date.now();
+          latestCommentary = '';
+          lastSentCommentary = '';
+          break;
         case 'tool_execution_start': {
           if (event.toolName) {
             this.bus.emit('agent.onTool', {
@@ -456,18 +474,24 @@ export class AgentService implements Service {
           break;
         }
         case 'message_update': {
-          // delta/text are carried at the top level in practice but not in the declared type.
-          const e = event as typeof event & { delta?: string; text?: string };
-          const delta = e.delta || e.text || '';
-          if (delta) {
-            this.bus.emit('agent.onDelta', { sessionKey, chunk: delta });
+          const update = event.assistantMessageEvent;
+          if (update.type === 'text_delta') {
+            this.bus.emit('agent.onDelta', { sessionKey, chunk: update.delta });
           }
           break;
         }
+        case 'message_end':
+          // Forward complete public commentary before tool use, never the final answer or thinking.
+          if (event.message.role === 'assistant') {
+            latestCommentary = event.message.stopReason === 'toolUse'
+              ? event.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n') : '';
+          }
+          break;
         case 'turn_end': {
           break;
         }
         case 'agent_end': {
+          lastProgressAt = undefined;
           const { content, error } = this.extractFinalAssistant(session, sessionKey);
           if (error) {
             const model = session.model?.id ?? 'unknown';
@@ -545,6 +569,7 @@ export class AgentService implements Service {
           break;
         }
       }
+      progress();
     });
   }
 

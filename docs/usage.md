@@ -199,6 +199,17 @@ the agent can `read`/`grep` on demand. Tune the ceiling (default `100000` chars 
 
 While the agent processes, the bot updates its message reactions: 👀 received → 🤔 thinking → 🔧 tool use → 👍 done / ❗ error. See [`services/channel/status-reactions.ts`](../services/channel/status-reactions.ts).
 
+### Event-driven progress
+
+`subscribeToSessionEvents` emits `agent.onProgress` at most once every 90 seconds during a
+channel run, when session events arrive. It reuses the latest completed public assistant
+commentary before tool use, without a summarization inference call or canned status text.
+Fresh commentary is sent once; duplicate or missing commentary produces no update.
+Private thinking, final-answer text, and tool arguments/results are not forwarded. The clock resets on
+`agent_start` and stops on `agent_end`. There is no background timer: a silent operation
+produces no update until the next eligible event. Cron, webhook, CLI, and subagent runs are
+excluded. The channel delivers progress directly, preserving final-reply tracking.
+
 ### Execution decisions
 
 `shouldExecute(allowFrom, userId, chatType, isMentioned)` in [`access.ts`](../services/channel/access.ts) decides whether the agent runs or the message is recorded to history only. Called by [`pipeline.ts`](../services/channel/pipeline.ts) for every inbound message.
