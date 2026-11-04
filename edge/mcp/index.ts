@@ -6,6 +6,11 @@
  *
  * Supports HTTP (StreamableHTTP) transport on port 9001.
  * Bearer token auth from config.mcp.bearerToken.
+ *
+ * HTTP is stateless: each request gets its own `Server` + `StreamableHTTPServerTransport`
+ * (`sessionIdGenerator: undefined`), so any number of clients can initialize, reconnect and
+ * disconnect independently. One shared transport rejects the second `initialize` with
+ * "Server already initialized" and demands a `Mcp-Session-Id` that clients never receive.
  */
 
 import http from 'node:http';
@@ -31,22 +36,13 @@ const VERSION = '0.0.1';
 
 export class McpEdge implements Service {
   readonly name = 'edge-mcp';
-  private mcpServer: Server;
   private httpServer: http.Server | null = null;
   private bus!: Bus;
   private config!: AppConfig;
 
-  constructor() {
-    this.mcpServer = new Server(
-      { name: 'vargos', version: VERSION },
-      { capabilities: { tools: {} } },
-    );
-  }
-
   async init(bus: Bus): Promise<void> {
     this.bus = bus;
     this.config = await bus.call<AppConfig>('config.get', {});
-    this.setupHandlers();
     await this.start();
   }
 
@@ -87,19 +83,23 @@ export class McpEdge implements Service {
   }
 
   async startStdio(): Promise<void> {
-    const transport = new StdioServerTransport();
-    await this.mcpServer.connect(transport);
+    const server = this.newServer();
+    await server.connect(new StdioServerTransport());
+  }
+
+  /** Fresh SDK server with bus-backed handlers — one per HTTP request, or one for stdio. */
+  private newServer(): Server {
+    const server = new Server(
+      { name: 'vargos', version: VERSION },
+      { capabilities: { tools: {} } },
+    );
+    this.setupHandlers(server);
+    return server;
   }
 
   // ── HTTP transport ─────────────────────────────────────────────────────────
 
   private async startHttp(bearerToken: string | null): Promise<void> {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-    });
-
-    await this.mcpServer.connect(transport);
-
     const expectedHash = bearerToken
       ? createHash('sha256').update(`Bearer ${bearerToken}`).digest()
       : null;
@@ -143,10 +143,37 @@ export class McpEdge implements Service {
         return;
       }
 
+      // Stateless: this request owns its server + transport, torn down when the response closes.
+      const server = this.newServer();
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      res.on('close', () => {
+        void transport.close();
+        void server.close();
+      });
+
+      let label = 'unknown';
       try {
-        await transport.handleRequest(req, res);
-      } catch {
-        if (!res.headersSent) {
+        let parsed: unknown;
+        if (req.method === 'POST') {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk as Buffer);
+          try {
+            parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error: invalid JSON body' }, id: null }));
+            return;
+          }
+        }
+
+        const method = typeof parsed === 'object' && parsed !== null ? (parsed as { method?: unknown }).method : undefined;
+        label = typeof method === 'string' ? method : 'unknown';
+        await server.connect(transport);
+        await transport.handleRequest(req, res, parsed);
+        log.debug(`mcp ${req.method} ${label} → ${res.statusCode}`);
+      } catch (err) {
+        log.error(`mcp ${req.method} ${label} failed: ${toMessage(err)}`);
+        if (!res.headersSent && !res.destroyed) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Internal server error' }));
         }
@@ -173,8 +200,8 @@ export class McpEdge implements Service {
 
   // ── MCP handlers ───────────────────────────────────────────────────────────
 
-  private setupHandlers(): void {
-    this.mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
+  private setupHandlers(server: Server): void {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: this.bus.list().filter(m => !m.internal).map(m => ({
           name:        m.name,
@@ -184,7 +211,7 @@ export class McpEdge implements Service {
       };
     });
 
-    this.mcpServer.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+    server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
       const { name, arguments: args } = request.params;
 
       if (!this.bus.has(name)) {
