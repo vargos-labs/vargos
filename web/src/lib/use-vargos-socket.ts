@@ -8,19 +8,28 @@ export interface VargosSocket {
   lastEvent: WsEvent | null;
   /** Bump counter — callers use this to know when to refetch the API. */
   version: number;
+  /** Endpoint dialled on the last connect attempt — for the status readout. */
+  url: string | null;
 }
 
-/**
- * Connect to the vargos web WebSocket server (default ws://<host>:9004) with
- * exponential-backoff reconnect. Every server event bumps `version` so pages can
- * refetch their API data on live changes.
- */
+// Explicit build-time URL, otherwise connect directly to the daemon's WS port.
+function wsUrl(): string {
+  const override = process.env.NEXT_PUBLIC_VARGOS_WS_URL;
+  if (override) return override;
+
+  const url = new URL(window.location.origin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.port = process.env.NEXT_PUBLIC_VARGOS_WS_PORT || "9004";
+  return url.toString();
+}
+
 export function useVargosSocket(
   onEvent?: (e: WsEvent) => void,
 ): VargosSocket {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<WsEvent | null>(null);
   const [version, setVersion] = useState(0);
+  const [url, setUrl] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
@@ -32,9 +41,9 @@ export function useVargosSocket(
 
     const connect = () => {
       if (disposed) return;
-      const proto = window.location.protocol === "https:" ? "wss" : "ws";
-      const port = process.env.NEXT_PUBLIC_VARGOS_WS_PORT || "9004";
-      const ws = new WebSocket(`${proto}://${window.location.hostname}:${port}`);
+      const target = wsUrl();
+      setUrl(target);
+      const ws = new WebSocket(target);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -73,7 +82,7 @@ export function useVargosSocket(
     };
   }, []);
 
-  return { connected, lastEvent, version };
+  return { connected, lastEvent, version, url };
 }
 
 /**

@@ -25,6 +25,16 @@ The console continues the daemon's `9000` block:
 | **9003** | **web console (Next child)** | `WEB_PORT` |
 | **9004** | **live-update WebSocket (in daemon)** | `VARGOS_WEB_WS_PORT` (client: `NEXT_PUBLIC_VARGOS_WS_PORT`) |
 
+For a reverse proxy, set `NEXT_PUBLIC_VARGOS_WS_URL` when building, for example:
+
+```bash
+NEXT_PUBLIC_VARGOS_WS_URL=wss://agent.vargos.io/ws pnpm build
+```
+
+Route `/ws` to the daemon's WebSocket port. Without this override, the browser
+connects directly to its current hostname on `NEXT_PUBLIC_VARGOS_WS_PORT` (default
+9004). Changing these client settings requires rebuilding.
+
 ## What it shows
 
 | Page | Source |
