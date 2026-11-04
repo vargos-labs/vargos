@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Gauge,
+  Globe,
   MessagesSquare,
   Radio,
   Timer,
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/cron", label: "Cron", icon: Timer },
   { href: "/models", label: "Models", icon: Boxes },
   { href: "/mcp", label: "MCP", icon: Plug },
+  { href: "/browser", label: "Browser", icon: Globe },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/memory", label: "Memory", icon: Database },
 ] as const;
@@ -63,6 +65,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             key={item.href}
             href={item.href}
+            target={item.href === "/browser" ? "_blank" : undefined}
+            rel={item.href === "/browser" ? "noopener noreferrer" : undefined}
+            prefetch={item.href === "/browser" ? false : undefined}
             onClick={onNavigate}
             className={cn(
               "group relative flex items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-muted-foreground transition-all hover:bg-primary/[0.06] hover:text-foreground",
