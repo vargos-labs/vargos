@@ -51,7 +51,7 @@ In order:
 
 ### Session caching
 
-Sessions are cached in-memory by `sessionKey`. They stay alive after `agent_end` for follow-up messages. Pi SDK persists each turn to `~/.vargos/sessions/<sessionKey-with-/>/<timestamp>_<uuid>.jsonl`. On restart, the next call for that sessionKey loads history from disk.
+Sessions are cached in-memory by `sessionKey`. They stay alive after `agent_settled` for follow-up messages. Pi SDK persists each turn to `~/.vargos/sessions/<sessionKey-with-/>/<timestamp>_<uuid>.jsonl`. On restart, the next call for that sessionKey loads history from disk.
 
 ### Inference error surfacing
 
@@ -103,8 +103,19 @@ Examples:
 
 1. **First touch** — `agent.execute` calls `getOrCreateSession`. If not cached, Vargos creates a Pi SDK `AgentSession`, loads any existing JSONL, and caches it.
 2. **Each turn** — Pi SDK appends to the JSONL. Streaming events flow through `subscribeToSessionEvents` → bus.
-3. **`agent_end`** — `agent.onCompleted` emits with the final response. **The session stays in memory** for follow-ups.
+3. **`agent_settled`** — `agent.onCompleted` emits with the final response. **The session stays in memory** for follow-ups.
 4. **Restart** — in-memory cache is empty after `pnpm start`. Next call for that sessionKey loads from disk.
+
+After successful compaction, Vargos logs `tokensBefore` and `estimatedTokensAfter`.
+If the SDK's estimated remaining session context exceeds 50% of the model window,
+rotation is scheduled for the next idle session access. The channel key stays the
+same; the new Pi session gets a fresh ID and a handoff of at most 2,000 estimated
+tokens, including current work and next steps. The full old JSONL is archived under
+`~/.vargos/archive/sessions/`; it is retired only after the new handoff is persisted.
+The channel receives status notices when compaction finishes (with available token
+estimates) and after rotation succeeds. These notices do not replace the task reply.
+Failed preparation retains the old session for retry. Pending rotation state is in memory and does not survive daemon restart.
+These context estimates are not exact provider token accounting.
 
 ### Observe-only path
 

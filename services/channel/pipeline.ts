@@ -29,7 +29,6 @@ export type AgentCompletedPayload =
 interface PipelineSession {
   adapter: ChannelAdapter;
   reactionController?: StatusReactionController;
-  replied: boolean;    // true if the agent called channel.send itself
   completed?: boolean; // true once agent.onCompleted handled it — guards against double-send
 }
 
@@ -54,12 +53,6 @@ export class InboundMessagePipeline {
     private readonly bus: Bus,
     private readonly config: AppConfig,
   ) { }
-
-  /** Record that the agent delivered its own reply, so completion does not send it twice. */
-  markReplied(sessionKey: string): void {
-    const session = this.sessions.get(sessionKey);
-    if (session) session.replied = true;
-  }
 
   /**
    * Process a normalized inbound message through the policy pipeline.
@@ -111,13 +104,12 @@ export class InboundMessagePipeline {
     const session: PipelineSession = {
       adapter,
       reactionController: this.startReaction(adapter, sessionKey, target.userId),
-      replied: false,
     };
     this.sessions.set(sessionKey, session);
 
     log.info(`← ${sessionKey} "${content.slice(0, 80)}"`);
 
-    // Cleanup is owned by onCompleted (pi's agent_end fires once at the true end of the run,
+    // Cleanup is owned by onCompleted (pi's agent_settled fires once at the true end of the run,
     // even under steering where a second message's agent.execute settles early). This catch
     // only covers a rejection that arrives WITHOUT a completion event (a pre-execution
     // failure), guarded by `completed` so it never double-sends or fights that cleanup.
@@ -170,7 +162,7 @@ export class InboundMessagePipeline {
       return;
     }
 
-    // agent.onCompleted (pi's agent_end) fires once at the true end of the run — even with
+    // agent.onCompleted (pi's agent_settled) fires once at the true end of the run — even with
     // steering, where a second message's agent.execute settles early. So THIS is the cleanup
     // anchor, not the execute promise: claim + remove the session now. The captured `session`
     // object still serves the async reply send + reaction seal below. `completed` guards the
@@ -182,9 +174,7 @@ export class InboundMessagePipeline {
     const text = payload.success ? (payload.response ?? '') : `Error: ${payload.error || 'Unknown error'}`;
     log.info(`→ ${sessionKey} ${payload.success ? '✓' : '✗'} (${text.length} chars)`);
 
-    // Send on error (always), or on a successful response the agent didn't already deliver
-    // via the channel-send tool.
-    const shouldSend = !payload.success || (!session.replied && !!payload.response);
+    const shouldSend = !payload.success || !!payload.response;
 
     this.finalize(session, sessionKey, payload.success).finally(() => {
       if (!shouldSend) return;

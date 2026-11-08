@@ -246,9 +246,6 @@ export class ChannelService implements Service {
     log.debug(`send: ${sessionKey} (${text.length} chars)`);
     await deliverReply((chunk) => adapter.send(sessionKey, chunk), stripMarkdown(text));
 
-    // Tell the pipeline the agent replied itself, so completion doesn't send it again
-    this.pipeline.markReplied(sessionKey);
-
     if (adapter.sendMedia) {
       for (const { filePath, mimeType } of extractMediaPaths(text)) {
         await adapter.sendMedia(sessionKey, filePath, mimeType)
