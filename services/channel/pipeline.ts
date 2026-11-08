@@ -130,10 +130,12 @@ export class InboundMessagePipeline {
       if (session.completed) return;
       const errorMsg = toMessage(err);
       log.error(`agent execution failed before completion: ${errorMsg}`);
-      this.finalize(session, sessionKey, false);
-      if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
-      this.bus.call('channel.send', { sessionKey, text: `System error: ${errorMsg}` })
-        .catch(sendErr => log.error(`failed to send error message: ${toMessage(sendErr)}`));
+      
+      this.finalize(session, sessionKey, false).finally(() => {
+        if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
+        this.bus.call('channel.send', { sessionKey, text: `System error: ${errorMsg}` })
+          .catch(sendErr => log.error(`failed to send error message: ${toMessage(sendErr)}`));
+      });
     });
   }
 
@@ -183,14 +185,14 @@ export class InboundMessagePipeline {
     // Send on error (always), or on a successful response the agent didn't already deliver
     // via the channel-send tool.
     const shouldSend = !payload.success || (!session.replied && !!payload.response);
-    const finalize = () => this.finalize(session, sessionKey, payload.success !== false);
 
-    if (!shouldSend) { finalize(); return; }
+    this.finalize(session, sessionKey, payload.success).finally(() => {
+      if (!shouldSend) return;
+      this.bus.call<{ sent: boolean }>('channel.send', { sessionKey, text })
+        .then(({ sent }) => log.debug(`→ ${sessionKey} sent=${sent}`))
+        .catch(err => log.error(`failed to send reply: ${toMessage(err)}`));
+    });
 
-    this.bus.call<{ sent: boolean }>('channel.send', { sessionKey, text })
-      .then(({ sent }) => log.debug(`→ ${sessionKey} sent=${sent}`))
-      .catch(err => log.error(`failed to send reply: ${toMessage(err)}`))
-      .finally(finalize);
   }
 
   /**
@@ -233,12 +235,19 @@ export class InboundMessagePipeline {
   }
 
   /** Seal the reaction (done/error) and stop the typing indicator. */
-  private finalize(session: PipelineSession, sessionKey: string, success: boolean): void {
+  private async finalize(session: PipelineSession, sessionKey: string, success: boolean): Promise<void> {
     if (session.reactionController) {
-      if (success) session.reactionController.setDone();
-      else session.reactionController.setError();
+      if (success) {
+        await session.reactionController.setDone();
+      }
+      else {
+        await session.reactionController.setError();
+      }
+
       session.reactionController.dispose();
     }
+
     session.adapter.stopTyping(sessionKey);
+    return;
   }
 }

@@ -31,20 +31,24 @@ export class StatusReactionController {
   ) {}
 
   /** Run is active. Idempotent — only the first call actually reacts. */
-  setWorking(): void { this.set('working'); }
-  setDone(): void    { this.set('done'); }
-  setError(): void   { this.set('error'); }
+  setWorking(): Promise<void> { return this.set('working'); }
+  setDone(): Promise<void>    { return this.set('done'); }
+  setError(): Promise<void>   { return this.set('error'); }
 
   dispose(): void { /* no timers to clear */ }
 
-  private set(phase: ReactionPhase): void {
-    if (this.sealed || phase === this.lastPhase) return;
+  private async set(phase: ReactionPhase): Promise<void> {
+    if (this.sealed || phase === this.lastPhase) return this.chain;
     this.lastPhase = phase;
+
     if (phase === 'done' || phase === 'error') this.sealed = true;
+
     const emoji = EMOJI[phase];
+
     this.chain = this.chain.then(() =>
       this.adapter.react(this.recipientId, this.messageId, emoji)
         .catch(() => { /* reaction failures are non-critical */ }),
     );
+    return this.chain;
   }
 }
