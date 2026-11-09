@@ -43,7 +43,7 @@
     "cli": "tsx cli.ts",
     "chat": "tsx scripts/seed.ts && PI_CODING_AGENT_DIR=\"${VARGOS_DATA_DIR:-$HOME/.vargos}/agent\" pi --session-dir \"${VARGOS_DATA_DIR:-$HOME/.vargos}/sessions/cli\"",
     "build": "rm -rf dist && tsc && cp -r .templates dist/.templates && chmod +x dist/cli.js && pnpm --filter @vargos-labs/vargos-web build && cp -r web/.next/standalone dist/web && rm -rf dist/web/node_modules dist/web/web/node_modules dist/web/package.json",
-    "prepare": "husky && pnpm run build",
+    "prepare": "husky",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint --no-error-on-unmatched-pattern 'core/**/*.ts' 'services/**/*.ts' 'edge/**/*.ts' 'lib/**/*.ts' '.migrations/**/*.ts' 'scripts/**/*.ts' 'index.ts' 'boot.ts' 'cli.ts' 'cli/**/*.ts' 'vitest.config.ts' && tsc --noEmit",
