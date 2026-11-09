@@ -30,7 +30,7 @@ function useSessionKey() {
   useEffect(() => {
     let k = localStorage.getItem("sts-test-session");
     if (!k) {
-      k = `sts:test:${Math.random().toString(36).slice(2, 10)}`;
+      k = `sts:test:${crypto.randomUUID()}`;
       localStorage.setItem("sts-test-session", k);
     }
     setKey(k);
