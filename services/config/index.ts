@@ -4,6 +4,8 @@ import type { Bus, Service } from '../../core/types.js';
 import { formatZodIssues } from '../../core/errors.js';
 import {
   AgentConfigSchema,
+  MemoryConfigSchema,
+  resolveMemoryConfig,
   AuthSchema,
   ChannelEntrySchema,
   CronTaskSchema,
@@ -39,6 +41,7 @@ export const AppConfigSchema = z
   .object({
     providers: ProvidersSchema.optional(),
     agent: AgentConfigSchema.optional(),
+    memory: MemoryConfigSchema.optional(),
     auth: AuthSchema,
     channels: z.array(ChannelEntrySchema).default([]),
     cron: z.object({
@@ -137,6 +140,8 @@ export class ConfigService implements Service {
 
     const auth = readJson(this.agentAuthFile);
     if (auth !== undefined) raw.auth = auth;
+
+    raw.memory = resolveMemoryConfig(raw);
 
     // Validate merged config
     const result = AppConfigSchema.safeParse(raw);

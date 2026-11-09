@@ -79,6 +79,7 @@ Messages go through a simple pipeline: **receive → process → execute → res
 | [Extending](./docs/extending.md) | Add tools, skills, providers |
 | [Examples](./docs/examples.md) | MCP integration, scheduled research, multi-channel |
 | [Debugging](./docs/debugging.md) | Debug modes and logging |
+| [Browser console](./docs/browser-console.md) | Playwright dashboard, manual browser access, and tunnel setup |
 | [Roadmap](./docs/ROADMAP.md) | Planned features |
 
 ## Usage

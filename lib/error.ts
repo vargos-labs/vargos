@@ -20,6 +20,39 @@ export function sanitizeError(msg: string): string {
     .replace(/(api[_-]?key|token|secret|password|authorization)[=:]\s*["']?[^\s"',}{]+/gi, '$1=***');
 }
 
+const PERMISSION_CODES = new Set(['EACCES', 'EPERM', 'EROFS']);
+
+/** A filesystem error the user has to fix themselves (ownership, mode, read-only mount). */
+export function isPermissionError(err: unknown): err is NodeJS.ErrnoException {
+  return err instanceof Error && PERMISSION_CODES.has((err as NodeJS.ErrnoException).code ?? '');
+}
+
+/**
+ * User-facing explanation for a permission failure while writing Vargos data: what failed,
+ * the likely cause, and one command that fixes it. Null when `err` isn't a permission error,
+ * so callers can fall through to their normal handling.
+ */
+export function permissionHint(err: unknown, dataDir: string): string | null {
+  if (!isPermissionError(err)) return null;
+  const target = err.path ?? dataDir;
+  const what = `${err.code}: ${err.syscall ?? 'access'} ${target}`;
+
+  if (err.code === 'EROFS') {
+    return [
+      `Vargos can't write its data folder — the filesystem is read-only.`,
+      `  ${what}`,
+      `  Fix: point Vargos at a writable folder:  VARGOS_DATA_DIR="$HOME/vargos-data" vargos setup`,
+    ].join('\n');
+  }
+  // Inside the data dir → reclaim the whole tree; anything else → just that path.
+  const owned = target === dataDir || target.startsWith(dataDir + '/') ? dataDir : target;
+  return [
+    `Vargos can't write ${owned} — permission denied (often created by sudo or another user).`,
+    `  ${what}`,
+    `  Fix:  sudo chown -R "$(id -un)" "${owned}" && chmod -R u+rwX "${owned}"`,
+  ].join('\n');
+}
+
 export type ErrorClass = 'transient' | 'auth' | 'timeout' | 'rate_limit' | 'capability' | 'unknown';
 
 /** Classify an error message for user-facing display. */

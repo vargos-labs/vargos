@@ -51,7 +51,7 @@ In order:
 
 ### Session caching
 
-Sessions are cached in-memory by `sessionKey`. They stay alive after `agent_end` for follow-up messages. Pi SDK persists each turn to `~/.vargos/sessions/<sessionKey-with-/>/<timestamp>_<uuid>.jsonl`. On restart, the next call for that sessionKey loads history from disk.
+Sessions are cached in-memory by `sessionKey`. They stay alive after `agent_settled` for follow-up messages. Pi SDK persists each turn to `~/.vargos/sessions/<sessionKey-with-/>/<timestamp>_<uuid>.jsonl`. On restart, the next call for that sessionKey loads history from disk.
 
 ### Inference error surfacing
 
@@ -103,8 +103,19 @@ Examples:
 
 1. **First touch** — `agent.execute` calls `getOrCreateSession`. If not cached, Vargos creates a Pi SDK `AgentSession`, loads any existing JSONL, and caches it.
 2. **Each turn** — Pi SDK appends to the JSONL. Streaming events flow through `subscribeToSessionEvents` → bus.
-3. **`agent_end`** — `agent.onCompleted` emits with the final response. **The session stays in memory** for follow-ups.
+3. **`agent_settled`** — `agent.onCompleted` emits with the final response. **The session stays in memory** for follow-ups.
 4. **Restart** — in-memory cache is empty after `pnpm start`. Next call for that sessionKey loads from disk.
+
+After successful compaction, Vargos logs `tokensBefore` and `estimatedTokensAfter`.
+If the SDK's estimated remaining session context exceeds 50% of the model window,
+rotation is scheduled for the next idle session access. The channel key stays the
+same; the new Pi session gets a fresh ID and a handoff of at most 2,000 estimated
+tokens, including current work and next steps. The full old JSONL is archived under
+`~/.vargos/archive/sessions/`; it is retired only after the new handoff is persisted.
+The channel receives status notices when compaction finishes (with available token
+estimates) and after rotation succeeds. These notices do not replace the task reply.
+Failed preparation retains the old session for retry. Pending rotation state is in memory and does not survive daemon restart.
+These context estimates are not exact provider token accounting.
 
 ### Observe-only path
 
@@ -214,7 +225,9 @@ While the agent processes, the bot updates its message reactions: 👀 received 
 | user whitelisted | group | no | **Observe** |
 | user not whitelisted | any | any | **Observe** |
 
-"Observe" means the message is appended to session history via `agent.appendMessage` (so the agent has context later) but no LLM call is made. This applies to both text and media:
+By default, messages marked **Observe** above are discarded before media downloads, link expansion, or history writes. Set `sentryMode: true` on the channel to retain them.
+
+With sentry mode enabled, "Observe" means the message is appended to session history via `agent.appendMessage` (so the agent has context later) but no LLM call is made. This applies to both text and media:
 
 - **Text** — appended as-is to history
 - **Media** — file is saved to disk, appended to history as a file path only. Vision/transcription/extraction are **skipped** (no API calls). Before paying for enrichment the base adapter asks `shouldEnrich()`, which the channel service wires to the same `shouldExecute()` rule — so the enrichment decision and the execution decision can never disagree.
@@ -444,7 +457,7 @@ Look for the `model_change` entry.
 
 ### Whitelist / channel rejection
 
-If an inbound message doesn't trigger an agent run, check `allowFrom` on the channel entry. Non-whitelisted senders' messages are appended to history (observe-only path via `shouldExecute()`) but the agent isn't invoked. See [`services/channel/pipeline.ts`](../services/channel/pipeline.ts).
+If an inbound message doesn't trigger an agent run, check `allowFrom` on the channel entry. Non-whitelisted senders' messages are discarded by default. With `sentryMode: true`, they are appended to history without invoking the agent. See [`services/channel/pipeline.ts`](../services/channel/pipeline.ts).
 
 Group chats: bot only runs when @-mentioned or replied-to.
 

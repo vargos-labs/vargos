@@ -76,6 +76,19 @@ class TestAdapter extends BaseChannelAdapter<RawMsg> {
 const settle = (ms = 30) => new Promise(r => setTimeout(r, ms));
 
 describe('BaseChannelAdapter inbound path', () => {
+  it('drops ignored text and attachments before downloading or saving', async () => {
+    const { saveMedia } = await import('../../../../lib/media.js');
+    vi.mocked(saveMedia).mockClear();
+    const adapter = new TestAdapter({ shouldReceive: () => false });
+    const resolve = vi.spyOn(adapter as unknown as { resolveMedia: () => Promise<InboundMediaSource | null> }, 'resolveMedia');
+    await adapter.inbound({ id: 'ignored-text', chatId: 'group-9', text: 'ignored' });
+    await adapter.inbound({ id: 'ignored-media', chatId: 'group-9', media: 'image' });
+    await adapter.stop();
+    expect(adapter.emitted).toEqual([]);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(saveMedia).not.toHaveBeenCalled();
+  });
+
   it('emits a session key built from the chat, not the sender', async () => {
     const adapter = new TestAdapter();
     await adapter.inbound({ id: 'm1', chatId: 'group-9', text: 'hi' });

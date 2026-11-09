@@ -63,7 +63,7 @@ The agent sees a filtered subset based on the channel persona's `allowedTools` g
 echo '{"jsonrpc":"2.0","id":1,"method":"memory.stats","params":{}}' | nc -q 1 127.0.0.1 9000
 ```
 
-The indexer watches `~/.vargos/workspace/**/*.md` and chunks JSONL session files. New writes get indexed within 5s. Embeddings disabled (`embeddingProvider: 'none'`) → only BM25 text scoring.
+The indexer watches `~/.vargos/workspace/**/*.md` and chunks JSONL session files. New writes get indexed within 5s. Default `memory.provider: 'keyword'` uses query-term matching without embedding API calls. Configure embeddings through `vargos config`; see [Memory search](./configuration.md#memory-search).
 
 ### `pnpm chat` doesn't see Vargos data
 

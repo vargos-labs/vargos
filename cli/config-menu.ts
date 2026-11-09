@@ -8,6 +8,7 @@
  */
 
 import * as p from '@clack/prompts';
+import { configureMemory } from './memory.js';
 import { configureProvider } from './provider.js';
 import { addChannel } from './enrich.js';
 import { runDoctors } from '../scripts/doctors/index.js';
@@ -21,6 +22,7 @@ export async function configMenu(): Promise<void> {
       message: 'What would you like to do?',
       options: [
         { value: 'provider', label: 'Change LLM provider / model' },
+        { value: 'memory', label: 'Configure memory search / embeddings' },
         { value: 'channel', label: 'Add a messaging channel' },
         { value: 'doctor', label: 'Re-check the environment' },
         { value: 'migrate', label: 'Run pending migrations' },
@@ -33,6 +35,9 @@ export async function configMenu(): Promise<void> {
     switch (choice) {
       case 'provider':
         await configureProvider();
+        break;
+      case 'memory':
+        await configureMemory();
         break;
       case 'channel':
         await addChannel();

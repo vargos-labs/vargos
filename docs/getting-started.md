@@ -30,17 +30,27 @@ pnpm run setup            # the same one command
 
 1. seed `~/.vargos/` from [`.templates/`](../.templates/) ([`lib/templates.ts`](../lib/templates.ts))
 2. apply pending data migrations (silent when there are none)
-3. **pick a provider + model, enter the API key** — this one Q&A writes all three files
-   (`agent/models.json`, `agent/auth.json`, `agent/settings.json`); a `${PROVIDER}_API_KEY`
-   in the environment is picked up automatically
+3. **pick a provider + model, enter the API key** — then one tiny test request goes through
+   the same Pi model runtime the agent uses; setup only says "ready" once it gets a reply
+   (or you choose "save it anyway"). A provider key already in the environment
+   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) is picked up automatically.
 4. check external prerequisites for anything you configured (uv, Playwright browsers)
-5. optionally connect a messaging channel — always skippable
+5. optionally connect a messaging channel — always skippable. For Telegram the token is
+   checked with Telegram, then you send your bot one message so only *you* are allowed in
+   (`allowFrom`).
 
-Presets: Anthropic, OpenAI, Google, OpenRouter, Groq, DeepSeek, Ollama. Any other
-OpenAI-compatible endpoint works — add it later with `vargos config`.
+Hosted providers (Anthropic, OpenAI, Google Gemini, OpenRouter, xAI, Mistral, DeepSeek,
+Groq) come from Pi SDK's built-in catalog — API type, base URL and model list — so there is
+no `models.json` entry for them. "Local / OpenAI-compatible" covers Ollama, LM Studio, vLLM,
+llama.cpp and any other `/v1` endpoint; its models are listed from the server.
 
-Headless (no TTY) and unconfigured: `vargos setup` / `vargos start` print what's missing
-and exit non-zero instead of booting a daemon that can't serve the agent.
+Headless (no TTY): with a provider key in the environment, `vargos setup` / `vargos start`
+configure that provider with its recommended model and test it; without one, they print
+what's missing and exit non-zero instead of booting a daemon that can't serve the agent.
+
+If `~/.vargos` isn't writable (typically created by `sudo`, or a read-only mount), setup and
+boot stop with the failing path and a one-line fix, e.g.
+`sudo chown -R "$(id -un)" "$HOME/.vargos" && chmod -R u+rwX "$HOME/.vargos"`.
 
 ## CLI management
 

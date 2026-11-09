@@ -61,14 +61,18 @@ The memory service indexes markdown files and recent session logs into a vector-
 - Preserves line numbers for citation (`path#L10-L25`)
 
 ### 3. Embedding (`embedding.ts`)
-- If `embeddingProvider` is `openai`, generates vectors via `text-embedding-3-small`
-- If `none`, skips embedding (text-only search)
+- If `memory.provider` is `openai`, generates vectors via `text-embedding-3-small`
+- If `memory.provider` is `ollama`, calls the native `/api/embed` endpoint (default model `embeddinggemma`)
+- If `memory.provider` is `keyword` (the default), skips embedding (text-only search)
+- Each chunk stores its embedding identity (provider/model/endpoint hash) in metadata. Startup clears and rebuilds the derived index if identities change or are missing; source files remain intact. Credentials are excluded from identity.
 - Each chunk stored with its vector in SQLite
 
 ### 4. Session Indexing (`session-indexer.ts`)
 - Finds all `*.jsonl` files in `~/.vargos/sessions/`
 - Indexes each message line individually (one chunk per message)
 - Tagged with `sessionKey`, `sessionLabel`, `role` in metadata
+
+Configuration lives under top-level `memory` in `config.json`; `vargos config` offers a post-install editor. See [Memory search](../../docs/configuration.md#memory-search).
 
 ## Search (`context.ts search()`)
 
@@ -95,7 +99,7 @@ Pattern: `services/memory/providers/` — same factory approach as channels.
 - `pg` (node-postgres) + `pgvector` — real `searchSimilar` via cosine `<=>` (HNSW index)
 - Tables: `memory_chunks` (embedding as `vector`, metadata as `jsonb`) + `memory_files` — table prefix configurable
 - Config: `config.storage.type: "postgres"` + `config.storage.url`. Missing url falls back to sqlite with a warning.
-- `searchSimilar` clamps scores to [0,1] to absorb fp jitter. Dimensionless vector columns tolerate mixed dimensions, so after an embedding-model swap the next search degrades to text-only (warn logged) until the old-dim chunks are overwritten by re-sync/reindex.
+- `searchSimilar` clamps scores to [0,1] to absorb fp jitter. Similarity queries filter by embedding identity and vector dimension; provider/model/endpoint changes trigger a startup rebuild before search is exposed.
 
 ## Tool Surface
 
@@ -116,4 +120,4 @@ Files under `workspace/memory/` must be read as `memory/filename.md`, NOT `filen
 Citations like `memory/2026-07-16.md#L5` are correct for `memory.read`. Pass them through as-is.
 
 ### Embedding provider is configured in app config, not agent settings
-`embeddingProvider` and `openaiApiKey` live on the top-level config (currently not surfaced in the config schema — hardcoded in `MemoryContext` constructor). This is inconsistent with how other services read config.
+`memory.provider`, `memory.key`, `memory.model`, and optional `memory.baseUrl` live in `config.json`, validated by `MemoryConfigSchema`. Edit them through `vargos config`. Keyword matching is the default; OpenAI and Ollama embeddings are supported.

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Gauge,
+  Globe,
   MessagesSquare,
   Radio,
   Timer,
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/cron", label: "Cron", icon: Timer },
   { href: "/models", label: "Models", icon: Boxes },
   { href: "/mcp", label: "MCP", icon: Plug },
+  { href: "/browser", label: "Browser", icon: Globe },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/memory", label: "Memory", icon: Database },
 ] as const;
@@ -63,6 +65,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             key={item.href}
             href={item.href}
+            target={item.href === "/browser" ? "_blank" : undefined}
+            rel={item.href === "/browser" ? "noopener noreferrer" : undefined}
+            prefetch={item.href === "/browser" ? false : undefined}
             onClick={onNavigate}
             className={cn(
               "group relative flex items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-muted-foreground transition-all hover:bg-primary/[0.06] hover:text-foreground",
@@ -92,7 +97,15 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarInner({ connected, onNavigate }: { connected: boolean; onNavigate?: () => void }) {
+function SidebarInner({
+  connected,
+  url,
+  onNavigate,
+}: {
+  connected: boolean;
+  url: string | null;
+  onNavigate?: () => void;
+}) {
   return (
     <>
       <div className="flex h-14 items-center gap-2.5 border-b border-border/70 px-4">
@@ -108,7 +121,7 @@ function SidebarInner({ connected, onNavigate }: { connected: boolean; onNavigat
       <div className="absolute inset-x-0 bottom-0 space-y-2 border-t border-border/70 p-3">
         <div className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
           <StatusDot tone={connected ? "online" : "offline"} pulse={connected} />
-          {connected ? "link · ws:9004" : "ws offline"}
+          {connected ? `link · ${url?.replace(/^wss?:\/\//, "") ?? "ws"}` : "ws offline"}
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground/70">
           <Activity className="size-3" />
@@ -122,7 +135,7 @@ function SidebarInner({ connected, onNavigate }: { connected: boolean; onNavigat
 /** Sidebar + header wrapper for every page. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { connected } = useVargosSocket();
+  const { connected, url } = useVargosSocket();
   const clock = useClock();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -134,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-56 border-r border-border/70 hud-surface md:block">
-        <SidebarInner connected={connected} />
+        <SidebarInner connected={connected} url={url} />
       </aside>
 
       {/* Mobile drawer */}
@@ -152,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <X className="size-4" />
             </button>
-            <SidebarInner connected={connected} onNavigate={() => setMobileOpen(false)} />
+            <SidebarInner connected={connected} url={url} onNavigate={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}

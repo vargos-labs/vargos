@@ -20,6 +20,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDataPaths } from './lib/paths.js';
+import { permissionHint } from './lib/error.js';
 import { parseCli, buildParams, renderList, renderHelp, RpcClient, type ParsedCli } from './core/cli.js';
 import { bootLocal } from './core/local.js';
 import { discoverServiceNames } from './core/services.js';
@@ -163,7 +164,7 @@ async function runBuiltin(cmd: string): Promise<boolean> {
       const { isReady, runSetup } = await import('./cli/ready.js');
       if (!isReady()) {
         // interactive → walk setup, then boot; headless → guidance + exit 1
-        await runSetup({ interactive: !!process.stdout.isTTY });
+        await runSetup({ interactive: !!process.stdout.isTTY, booting: true });
       }
       await import('./index.js');
       await new Promise(() => {}); // TCP server keeps the loop alive
@@ -318,26 +319,36 @@ async function dispatch(parsed: ParsedCli): Promise<number> {
 const argv = process.argv.slice(2);
 const parsed = parseCli(argv);
 
-if (!parsed.service) {
-  if (parsed.help || argv.includes('--help') || argv.includes('-h')) { await usage(); process.exit(0); }
-  const { isReady, runSetup } = await import('./cli/ready.js');
-  if (!isReady()) {
-    await runSetup({ interactive: !!process.stdout.isTTY });
-    console.log('\n  Next: run "vargos start" to boot the daemon.\n');
-  } else {
-    await usage();
+async function main(): Promise<void> {
+  if (!parsed.service) {
+    if (parsed.help || argv.includes('--help') || argv.includes('-h')) { await usage(); process.exit(0); }
+    const { isReady, runSetup } = await import('./cli/ready.js');
+    if (!isReady()) {
+      await runSetup({ interactive: !!process.stdout.isTTY });
+    } else {
+      await usage();
+    }
+    process.exit(0);
   }
-  process.exit(0);
+
+  if (parsed.reserved) {
+    const handled = await runBuiltin(parsed.service);
+    process.exit(handled ? 0 : 1);
+  }
+
+  // `channel pair` is a CLI-local interactive action (QR), not a registry/daemon method.
+  if ((parsed.service === 'channel' || parsed.service === 'channels') && parsed.method === 'pair') {
+    process.exit(await pairChannel(parsed.args));
+  }
+
+  process.exit(await dispatch(parsed));
 }
 
-if (parsed.reserved) {
-  const handled = await runBuiltin(parsed.service);
-  process.exit(handled ? 0 : 1);
-}
-
-// `channel pair` is a CLI-local interactive action (QR), not a registry/daemon method.
-if ((parsed.service === 'channel' || parsed.service === 'channels') && parsed.method === 'pair') {
-  process.exit(await pairChannel(parsed.args));
-}
-
-process.exit(await dispatch(parsed));
+// A data dir we can't write (sudo-created ~/.vargos, read-only mount) is the user's to fix:
+// say what failed and the one command that fixes it, instead of a Node stack trace.
+await main().catch((err: unknown) => {
+  const hint = permissionHint(err, getDataPaths().dataDir);
+  if (!hint) throw err;
+  process.stderr.write(`\n  ⚡ ${hint}\n\n`);
+  process.exit(1);
+});

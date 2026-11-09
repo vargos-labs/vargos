@@ -5,7 +5,7 @@ import { FSWatcher, watch } from 'node:fs';
 import type { MemoryStorage, MemoryChunk } from './types.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
-import { generateEmbedding, cosineSimilarity, textScore } from './embedding.js';
+import { generateEmbedding, cosineSimilarity, textScore, embeddingIdentity } from './embedding.js';
 import type { EmbeddingConfig } from './embedding.js';
 import { createChunks } from './chunker.js';
 import { indexSessions } from './session-indexer.js';
@@ -26,9 +26,10 @@ export interface MemoryContextConfig {
   sessionsDir?:      string;
   chunkSize?:        number;
   chunkOverlap?:     number;
-  embeddingProvider?: 'openai' | 'local' | 'none';
+  embeddingProvider?: 'openai' | 'ollama' | 'local' | 'none';
   openaiApiKey?:     string;
   embeddingModel?:   string;
+  embeddingBaseUrl?: string;
   hybridWeight?:     { vector: number; text: number };
   storage?:          MemoryStorage;
   enableFileWatcher?: boolean;
@@ -37,10 +38,11 @@ export interface MemoryContextConfig {
 export class MemoryContext {
   private readonly chunkSize:        number;
   private readonly chunkOverlap:     number;
-  private readonly embeddingProvider: 'openai' | 'local' | 'none';
+  private readonly embeddingProvider: 'openai' | 'ollama' | 'local' | 'none';
   private readonly hybridWeight:     { vector: number; text: number };
   private readonly enableFileWatcher: boolean;
   private readonly embeddingConfig:  EmbeddingConfig;
+  private readonly identity: string;
   private chunks: Map<string, MemoryChunk> = new Map();
   private lastSync = 0;
   private storage: MemoryStorage | null    = null;
@@ -57,21 +59,29 @@ export class MemoryContext {
       provider:     this.embeddingProvider,
       openaiApiKey: config.openaiApiKey,
       model:        config.embeddingModel,
+      baseUrl:      config.embeddingBaseUrl,
     };
+    this.identity = embeddingIdentity(this.embeddingConfig);
   }
 
   async initialize(): Promise<void> {
     await fs.mkdir(this.config.cacheDir, { recursive: true });
 
+    let rebuild = false;
     if (this.config.storage) {
       this.storage = this.config.storage;
       await this.storage.initialize();
-      for (const chunk of await this.storage.getAllChunks()) {
-        this.chunks.set(chunk.id, chunk);
+      const stored = await this.storage.getAllChunks();
+      rebuild = stored.some(chunk => chunk.metadata.embeddingIdentity !== this.identity);
+      if (rebuild) {
+        log.info('embedding configuration changed or index is unversioned; rebuilding derived memory index');
+        await this.storage.clear();
+      } else {
+        for (const chunk of stored) this.chunks.set(chunk.id, chunk);
       }
     }
 
-    await this.sync({ reason: 'init' });
+    await this.sync({ reason: 'init', force: rebuild });
 
     if (this.enableFileWatcher) this.startFileWatcher();
   }
@@ -101,6 +111,7 @@ export class MemoryContext {
       const embed = (text: string) => generateEmbedding(text, this.embeddingConfig);
       const sessionChunks = await indexSessions(this.config.sessionsDir, embed);
       for (const chunk of sessionChunks) {
+        chunk.metadata.embeddingIdentity = this.identity;
         this.chunks.set(chunk.id, chunk);
         await this.storage?.saveChunk(chunk);
       }
@@ -115,6 +126,10 @@ export class MemoryContext {
     if (!stat) return true;
     const status = await this.storage.getFileStatus(relPath);
     if (!status) return true;
+    if (this.embeddingProvider !== 'none') {
+      const fileChunks = [...this.chunks.values()].filter(chunk => chunk.path === relPath);
+      if (fileChunks.some(chunk => !chunk.embedding)) return true;
+    }
     return status.mtime !== stat.mtime.getTime() || status.size !== stat.size;
   }
 
@@ -138,6 +153,7 @@ export class MemoryContext {
       }
 
       for (const chunk of chunks) {
+        chunk.metadata.embeddingIdentity = this.identity;
         this.chunks.set(chunk.id, chunk);
         await this.storage?.saveChunk(chunk);
       }
@@ -191,8 +207,9 @@ export class MemoryContext {
   ): Promise<Map<string, number>> {
     const vectorResults = new Map<string, number>();
     if (queryEmbedding && this.storage?.searchSimilar) {
-      const hits = await this.storage.searchSimilar(queryEmbedding, maxResults * 2, minScore);
+      const hits = await this.storage.searchSimilar(queryEmbedding, maxResults * 2, minScore, this.identity);
       for (const { chunk, score } of hits) {
+        if (chunk.metadata.embeddingIdentity !== this.identity) continue;
         vectorResults.set(chunk.id, score * this.hybridWeight.vector);
         if (!this.chunks.has(chunk.id)) this.chunks.set(chunk.id, chunk);
       }
@@ -212,7 +229,7 @@ export class MemoryContext {
       let score = vectorResults.get(chunk.id) ?? 0;
 
       // Add vector scoring if storage doesn't support similarity search but query embedding exists
-      if (!this.storage?.searchSimilar && queryEmbedding && chunk.embedding) {
+      if (!this.storage?.searchSimilar && queryEmbedding && chunk.embedding && chunk.metadata.embeddingIdentity === this.identity) {
         score += cosineSimilarity(queryEmbedding, chunk.embedding) * this.hybridWeight.vector;
       }
 

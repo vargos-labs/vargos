@@ -57,7 +57,8 @@ the staging dir for inspection.
 
 `boot.ts` discovers `services/*/index.<ext>` and loads them: `config` and `log` first (others read config during `init`), then the rest, then the JSON-RPC server, then `bus.onReady`.
 
-`edge/mcp/` and `edge/webhooks/` exist in code but are not auto-discovered (they live in `edge/`). `index.ts` is a tiny supervisor that spawns `boot.ts` as a child and respawns it on exit code 42 — that's how `bus.restartProcess` picks up fresh code from disk without needing systemd.
+`boot.ts` also discovers `edge/*/index.<ext>` through `core/edges.ts` after core services.
+The optional `edge/browser` dashboard setup is documented in `docs/browser-console.md`. `index.ts` is a tiny supervisor that spawns `boot.ts` as a child and respawns it on exit code 42 — that's how `bus.restartProcess` picks up fresh code from disk without needing systemd.
 
 ## Key Patterns
 
