@@ -23,7 +23,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { Bus, Service } from '../../core/types.js';
+import type { Bus, MethodInfo, Service } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
@@ -200,10 +200,14 @@ export class McpEdge implements Service {
 
   // ── MCP handlers ───────────────────────────────────────────────────────────
 
+  private externalTools(): MethodInfo[] {
+    return this.bus.list().filter(m => !m.internal && m.external !== false);
+  }
+
   private setupHandlers(server: Server): void {
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: this.bus.list().filter(m => !m.internal).map(m => ({
+        tools: this.externalTools().map(m => ({
           name:        m.name,
           description: m.description,
           inputSchema: (m.schema ?? {}) as Record<string, unknown>,
@@ -214,7 +218,7 @@ export class McpEdge implements Service {
     server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
       const { name, arguments: args } = request.params;
 
-      if (!this.bus.has(name)) {
+      if (!this.externalTools().some(tool => tool.name === name)) {
         return {
           content: [{ type: 'text', text: `Unknown tool: ${name}` }],
           isError: true,
@@ -236,7 +240,7 @@ export class McpEdge implements Service {
   }
 
   private async buildOpenApiSpec(): Promise<Record<string, unknown>> {
-    const tools = this.bus.list().filter(m => !m.internal);
+    const tools = this.externalTools();
     const paths: Record<string, unknown> = {};
 
     for (const m of tools) {

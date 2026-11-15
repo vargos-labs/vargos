@@ -14,6 +14,8 @@ const ENDPOINT = `http://127.0.0.1:${PORT}/mcp`;
 function stubBus(): Bus {
   const tools = [
     { name: 'echo', description: 'Echo back', schema: { type: 'object', properties: { msg: { type: 'string' } } }, internal: false },
+    { name: 'mcp.playwright.browser_navigate', description: 'Navigate', schema: {}, internal: false, external: false },
+    { name: 'private.action', description: 'Agent only', schema: {}, internal: false, external: false },
     { name: 'internal.only', description: 'hidden', schema: {}, internal: true },
   ];
   return {
@@ -132,6 +134,24 @@ describe('edge-mcp HTTP connection handling', () => {
     const result = body.result as { content: { text: string }[]; isError: boolean };
     expect(result.isError).toBe(false);
     expect(JSON.parse(result.content[0].text)).toEqual({ echo: 'ping' });
+  });
+
+  it.each(['mcp.playwright.browser_navigate', 'private.action', 'internal.only', 'missing'])(
+    'rejects direct external calls to %s', async (name) => {
+      const res = await post({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: {} } });
+      const result = (await jsonFrom(res)).result as { isError: boolean; content: { text: string }[] };
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toBe(`Unknown tool: ${name}`);
+    },
+  );
+
+  it('only documents externally available tools in OpenAPI', async () => {
+    const res = await fetch(`http://127.0.0.1:${PORT}/openapi.json`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    const spec = await res.json() as { paths: Record<string, unknown> };
+    expect(Object.keys(spec.paths)).toEqual(['/tools/echo']);
   });
 
   it('one client disconnecting does not disturb another', async () => {

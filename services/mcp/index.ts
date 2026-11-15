@@ -72,6 +72,7 @@ export class McpClientService implements Service {
     this.config = await bus.call<AppConfig>('config.get', {});
 
     bus.register('mcp.list', {
+      external: false,
       description: 'List configured MCP servers (config.mcpServers + agent/mcp.json) with live connection status.',
       schema: z.object({}),
     }, () => this.list());
@@ -299,6 +300,7 @@ export class McpClientService implements Service {
     // Convert MCP JSON Schema to Zod schema for introspection
     const zodSchema = this.jsonSchemaToZod(tool.inputSchema as JsonSchemaNode);
     const toolSchema = {
+      external: false,
       description: tool.description || `MCP tool: ${tool.name}`,
       schema: zodSchema,
     };

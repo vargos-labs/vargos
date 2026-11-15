@@ -20,6 +20,8 @@ export interface MethodOptions {
   cli?: CliShape;
   /** Hide from the agent tool surface (still callable via CLI/RPC). Default false. */
   internal?: boolean;
+  /** Expose through the external MCP gateway and its OpenAPI spec. Default true. */
+  external?: boolean;
   /**
    * Method only completes meaningfully against a running daemon (live channels, agent
    * session state, fire-and-forget runs). The CLI refuses it with a "start the daemon"
@@ -44,6 +46,8 @@ export interface MethodInfo {
   description: string;
   cli?: CliShape;
   internal: boolean;
+  /** External MCP exposure; omitted means true. Independent of agent visibility. */
+  external?: boolean;
   /** Requires a running daemon (see MethodOptions.live). */
   live: boolean;
   /** JSON Schema derived from the zod schema. */

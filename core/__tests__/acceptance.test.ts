@@ -132,6 +132,18 @@ describe('core acceptance', () => {
       expect(send.description).toBe('Send a message via a channel');
     });
 
+    it('defaults to external exposure while keeping non-external tools available internally', async () => {
+      expect(send.external).toBe(true);
+      const localBus = new EmitterBus();
+      localBus.register('private.action', {
+        schema: z.object({}), description: 'Agent tool', external: false,
+      }, () => 'ok');
+      expect(localBus.list().filter(m => !m.internal)).toContainEqual(expect.objectContaining({
+        name: 'private.action', external: false, internal: false,
+      }));
+      await expect(localBus.call('private.action', {})).resolves.toBe('ok');
+    });
+
     it('renders description and arg shape in --help', () => {
       expect(renderHelp('channel', bus.list('channel'))).toContain('Send a message via a channel');
     });
