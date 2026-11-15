@@ -9,7 +9,7 @@ const log = createLogger('media-cache');
  * Stores the cache in `{filePath}.metadata.json` next to the media file — survives restarts
  * and prevents duplicate API calls for the same file.
  *
- * Shared by the media and stt services.
+ * Used by the media service for transcription and image descriptions.
  */
 export interface MediaCacheEntry {
   transcribe?: string;

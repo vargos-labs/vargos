@@ -4,8 +4,7 @@ import type { AppConfig } from '../../config/index.js';
  * Resolves a "provider:model" reference (e.g. "voicestudio:large-v3") against the
  * merged app config — auth key from `auth[provider]`, baseUrl from `providers[provider]`.
  *
- * Shared by the media, stt and tts services so every media-model reference resolves
- * the same way.
+ * Used by the media service for audio transcription and image description.
  */
 export interface ResolvedModelRef {
   provider: string;
