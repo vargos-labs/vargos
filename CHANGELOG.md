@@ -2,6 +2,20 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.4.5] - 2026-11-16
+
+### Added
+- MCP progress notifications for agent execution, with completed outward text and tool activity filtered from session events.
+- Optional task names for MCP conversation keys and a typed reasoning-effort override for agent execution.
+
+### Fixed
+- Imported MCP tools remain available internally without being re-exported through the external MCP gateway.
+
+### Removed
+- Unused STS, STT, and TTS services and their experimental web surface. Channel voice-message transcription remains available through the media service.
+
+[3.4.5]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.5
+
 ## [3.4.2] - 2026-10-14
 
 ### Fixed
