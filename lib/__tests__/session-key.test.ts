@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   subagentSessionKey,
+  mcpAgentSessionKey,
   isSubagentSession,
   rootSessionKey,
   parseSessionKey,
@@ -112,5 +113,20 @@ describe('parseChannelTarget', () => {
 
   it('returns null for empty string', () => {
     expect(parseChannelTarget('')).toBeNull();
+  });
+});
+
+
+describe('mcpAgentSessionKey', () => {
+  it.each([
+    ['Research AI News!', 'mcp:agent:research-ai-news'],
+    ['  Café / sources..  ', 'mcp:agent:cafe-sources'],
+    ['../../', 'mcp:agent:task'],
+    ['研究 新闻', 'mcp:agent:研究-新闻'],
+  ])('creates a stable safe key for %s', (name, expected) => {
+    expect(mcpAgentSessionKey(name)).toBe(expected);
+  });
+  it('bounds the slug length', () => {
+    expect(mcpAgentSessionKey('a'.repeat(200))).toBe(`mcp:agent:${'a'.repeat(80)}`);
   });
 });

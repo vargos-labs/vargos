@@ -3,6 +3,13 @@
  */
 import { randomBytes } from 'node:crypto';
 
+/** Stable MCP conversation key derived from a human-readable task name. */
+export function mcpAgentSessionKey(taskName: string): string {
+  const slug = taskName.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 80).replace(/^-+|-+$/g, '');
+  return `mcp:agent:${slug || 'task'}`;
+}
+
 export function cronSessionKey(taskId: string): string {
   return `cron:${taskId}:${new Date().toISOString().slice(0, 10)}`;
 }

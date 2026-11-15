@@ -27,6 +27,8 @@ import type { Bus, MethodInfo, Service } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
+import { subscribeProgress } from './progress.js';
+import { mcpAgentSessionKey } from '../../lib/session-key.js';
 
 const log = createLogger('mcp');
 
@@ -215,7 +217,7 @@ export class McpEdge implements Service {
       };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
       const { name, arguments: args } = request.params;
 
       if (!this.externalTools().some(tool => tool.name === name)) {
@@ -225,8 +227,18 @@ export class McpEdge implements Service {
         };
       }
 
+      const callArgs = name === 'agent.execute'
+        ? { ...args, sessionKey: args?.sessionKey || mcpAgentSessionKey(
+          typeof args?.taskName === 'string' ? args.taskName : String(Date.now()),
+        ) }
+        : args;
+      const close = subscribeProgress(
+        this.bus, name === 'agent.execute' ? callArgs?.sessionKey as string : undefined,
+        request.params._meta?.progressToken, extra.signal, extra.sendNotification,
+      );
+
       try {
-        const result = await this.bus.call(name, args);
+        const result = await this.bus.call(name, callArgs);
         // Convert result to MCP format
         const resultText = result && typeof result === 'object' ? JSON.stringify(result) : String(result);
         return { content: [{ type: 'text', text: resultText }], isError: false };
@@ -235,6 +247,8 @@ export class McpEdge implements Service {
           content: [{ type: 'text', text: toMessage(err) }],
           isError: true,
         };
+      } finally {
+        await close();
       }
     });
   }

@@ -12,6 +12,7 @@ import { z } from 'zod';
 import path from 'node:path';
 import type { Bus, Service, Json } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
+import { ThinkingLevelSchema, type ThinkingLevel } from '../config/schemas/primitives.js';
 import { createLogger } from '../../lib/logger.js';
 import { withTimeout } from '../../lib/util.js';
 import { interpolatePrompt } from './prompt-interpolate.js';
@@ -37,6 +38,7 @@ import {
 
 /** A resolved Pi SDK model (the type carried by `AgentSession.model`). */
 type ResolvedModel = NonNullable<AgentSession['model']>;
+
 
 // PiAgent event types for type-safe event mapping
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
@@ -140,12 +142,14 @@ export class AgentService implements Service {
 
   private registerMethods(bus: Bus): void {
     bus.register('agent.execute', {
-      description: 'Executes a task with the agent, optionally delegating to a subagent.',
+      description: 'Delegate a task or ask a question to the Vargos agent. It can reason, run configured skills, use tools and connected MCP servers, and work in the specified directory. Returns the final answer; MCP callers can request progress updates while it works.',
       // passthrough keeps `sessionKey` (auto-injected by the tool wrapper, supplied by
       // direct callers) alive through validation without advertising it as a tool param.
       schema: z.object({
-        task: z.string().describe('The task to execute.'),
+        task: z.string().describe('The task to execute or question to answer.'),
+        taskName: z.string().trim().min(1).max(160).optional().describe('Short task name. MCP uses mcp:agent:<slugified-name> as the conversation key unless sessionKey is supplied. Reuse a name to continue its conversation; omit to use the current timestamp.'),
         cwd: z.string().optional().describe('Working directory for the agent — defaults to workspace dir.'),
+        reasoningEffort: ThinkingLevelSchema.optional().describe('Optional reasoning effort for this session. Clamped to model capabilities; omit to keep the current setting.'),
         model: z.string().optional().describe('Optional model override as "provider:modelId" (e.g. "anthropic:claude-opus-4"). Omit to use the agent default.'),
       }).passthrough(),
       cli: { positional: ['task'] },
@@ -210,7 +214,7 @@ export class AgentService implements Service {
    * the agent calls this as a tool; direct callers (channels, cron, webhooks, RPC)
    * supply it. It survives validation via the schema's .passthrough().
    */
-  private async execute(params: { sessionKey?: string; task: string; cwd?: string; model?: string }): Promise<{ response: string }> {
+  private async execute(params: { sessionKey?: string; task: string; taskName?: string; cwd?: string; model?: string; reasoningEffort?: ThinkingLevel }): Promise<{ response: string }> {
     // Channels/cron/webhooks and the agent-tool wrapper always supply a sessionKey; a bare
     // `vargos agent execute "<task>"` does not, so default to a shared ad-hoc CLI session.
     const sessionKey = params.sessionKey || 'cli:adhoc';
@@ -228,6 +232,7 @@ export class AgentService implements Service {
     const task = interpolatePrompt(params.task, { SESSION_KEY: sessionKey }).trim();
 
     const session = await this.getOrCreateSession(sessionKey, { cwd: params.cwd, model });
+    if (params.reasoningEffort !== undefined) session.setThinkingLevel(params.reasoningEffort, { persist: false });
 
     const timeoutMs = this.config.agent?.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS;
 
@@ -331,7 +336,7 @@ export class AgentService implements Service {
     }
 
     const paths = getDataPaths();
-    const effectiveCwd = options?.cwd ?? paths.dataDir;
+    const effectiveCwd = options?.cwd ?? paths.workspaceDir;
 
     const sessionDir = path.join(paths.sessionsDir, sessionKey.replace(/:/g, path.sep));
     // Use continueRecent to find and load the latest session file (preserves history).
@@ -495,6 +500,7 @@ export class AgentService implements Service {
    */
   protected subscribeToSessionEvents(session: AgentSession, sessionKey: string): void {
     session.subscribe((event: AgentSessionEvent) => {
+      this.bus.emit('agent.onProgress', { ...event, sessionKey });
       // Switching on event.type directly lets TypeScript narrow the union per-case,
       // so each branch can access typed fields without casting.
       switch (event.type) {

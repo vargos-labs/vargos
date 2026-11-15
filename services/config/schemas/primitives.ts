@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod';
+import type { ThinkingLevel as SdkThinkingLevel } from '@earendil-works/pi-agent-core';
 
 // ─── JSON (recursive type) ────────────────────────────────────────────────────
 
@@ -22,5 +23,5 @@ export const JsonSchema: z.ZodType<Json> = z.lazy(() =>
 
 // ─── Common enums ─────────────────────────────────────────────────────────────
 
-export const ThinkingLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+export const ThinkingLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly SdkThinkingLevel[]);
 export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;

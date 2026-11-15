@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { ThinkingLevelSchema } from './primitives.js';
 
 // ─── PiAgent Settings Schemas ──────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ export const PackageSourceSchema = z.union([
 
 export const PiAgentSettingsSchema = z.object({
   lastChangelogVersion: z.string().optional(),
-  defaultThinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
+  defaultThinkingLevel: ThinkingLevelSchema.optional(),
   steeringMode: z.enum(['all', 'one-at-a-time']).optional(),
   followUpMode: z.enum(['all', 'one-at-a-time']).optional(),
   theme: z.string().optional(),
