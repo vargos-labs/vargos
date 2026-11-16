@@ -134,8 +134,14 @@ function SidebarInner({
   );
 }
 
-/** Sidebar + header wrapper for every page. */
+/** Spatial previews own their full-screen shell. */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (pathname === "/v2" || pathname.startsWith("/v2/")) return <>{children}</>;
+  return <ConsoleShell>{children}</ConsoleShell>;
+}
+
+function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { connected, url } = useVargosSocket();
   const clock = useClock();

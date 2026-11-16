@@ -1,0 +1,7 @@
+.reactor {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  pointer-events: none;
+  contain: layout paint;
+}

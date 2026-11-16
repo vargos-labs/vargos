@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Mic, MicOff, Phone, PhoneOff, Pause, Play, Square, Wrench, Sparkles, Check, LoaderCircle, CircleAlert, AudioLines, MessagesSquare } from "lucide-react";
-import type { VoiceActivity } from "@vargos/lib/voice";
-import { VoiceClient } from "@/lib/voice-client";
+import { useVoiceConversation } from "@/lib/use-voice-conversation";
 import { VoiceOrb } from "@/components/voice/voice-orb";
 import { PageHeader } from "@/components/hud/page-header";
 import { Panel } from "@/components/hud/panel";
@@ -11,45 +10,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function VoicePage() {
-  const client = useRef<VoiceClient | null>(null);
-  const [active, setActive] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [status, setStatus] = useState("Ready when you are");
-  const [error, setError] = useState("");
-  const [level, setLevel] = useState(0);
-  const [outputLevel, setOutputLevel] = useState(0);
-  const [seconds, setSeconds] = useState(0);
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
-  const [activities, setActivities] = useState<VoiceActivity[]>([]);
+  const { active, muted, paused, status, error, inputLevel: level, outputLevel, seconds,
+    messages, activities, start, stop, toggleMuted, togglePaused: pause, interrupt } = useVoiceConversation();
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
-  useEffect(() => () => client.current?.stop(), []);
-  useEffect(() => {
-    if (!active) return;
-    const timer = setInterval(() => setSeconds(s => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, [active]);
   useEffect(() => { transcriptEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [messages]);
 
-  function start() {
-    setError(""); setStatus("Connecting"); setActive(true); setMuted(false); setPaused(false); setMessages([]); setActivities([]); setSeconds(0);
-    const voice = new VoiceClient({
-      status: setStatus, level: setLevel, outputLevel: setOutputLevel, error: setError,
-      activity: activity => setActivities(current => {
-        const existing = current.find(item => item.id === activity.id);
-        return existing ? current.map(item => item.id === activity.id ? activity : item) : [...current.slice(-99), activity];
-      }),
-      transcript: (role, text) => setMessages(current => [...current.slice(-99), { role, text }]),
-      closed: () => { setActive(false); setPaused(false); setStatus("Conversation ended"); },
-    });
-    client.current = voice;
-    void voice.start();
-  }
-  function pause() {
-    const next = !paused;
-    setPaused(next);
-    void client.current?.setPaused(next);
-  }
   const running = activities.filter(item => item.state === "running");
   const tools = activities.filter(item => item.kind === "tool").length;
   const skills = activities.filter(item => item.kind === "skill").length;
@@ -68,13 +33,13 @@ export default function VoicePage() {
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">{!active ? "Start a conversation. Your microphone stays off until you do." : paused ? "Audio is paused. Agent work already started continues." : status === "Working" ? "Your agent is working in the background. You can keep talking." : status === "Speaking" ? "You can speak at any time to interrupt." : "Speak naturally. Vargos will respond when you finish."}</p>
         </div>
         <div className="relative mt-7 flex items-center gap-3">
-          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active} onClick={() => { client.current?.setMuted(!muted); setMuted(!muted); }} aria-label={muted ? "Unmute microphone" : "Mute microphone"} aria-pressed={muted} title={muted ? "Unmute microphone" : "Mute microphone"}>{muted ? <MicOff /> : <Mic />}</Button>
+          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active} onClick={toggleMuted} aria-label={muted ? "Unmute microphone" : "Mute microphone"} aria-pressed={muted} title={muted ? "Unmute microphone" : "Mute microphone"}>{muted ? <MicOff /> : <Mic />}</Button>
           <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active} onClick={pause} aria-label={paused ? "Resume conversation" : "Pause conversation"} aria-pressed={paused} title={paused ? "Resume conversation" : "Pause conversation"}>{paused ? <Play /> : <Pause />}</Button>
-          <Button size="icon" className={cn("size-14 rounded-full shadow-lg", active && "bg-destructive text-white hover:bg-destructive/90")} onClick={() => active ? client.current?.stop() : start()} aria-label={active ? "End conversation" : "Start conversation"} title={active ? "End conversation" : "Start conversation"}>{active
+          <Button size="icon" className={cn("size-14 rounded-full shadow-lg", active && "bg-destructive text-white hover:bg-destructive/90")} onClick={() => active ? stop() : start()} aria-label={active ? "End conversation" : "Start conversation"} title={active ? "End conversation" : "Start conversation"}>{active
             ? <PhoneOff className="size-5" />
             : <Phone className="size-5" />}
           </Button>
-          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active || paused} onClick={() => client.current?.interrupt()} aria-label="Interrupt reply" title="Interrupt reply"><Square className="size-3.5" /></Button>
+          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active || paused} onClick={interrupt} aria-label="Interrupt reply" title="Interrupt reply"><Square className="size-3.5" /></Button>
         </div>
         <div role="meter" aria-label="Microphone level"
           aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(level*100)} className="relative mt-6 h-1 w-32 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${level*100}%` }} /></div>

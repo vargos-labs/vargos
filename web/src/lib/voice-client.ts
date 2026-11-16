@@ -1,6 +1,7 @@
 import type { VoiceActivity } from "@vargos/lib/voice";
 
 export interface VoiceCallbacks {
+  session?: (sessionKey: string) => void;
   status: (text: string) => void;
   transcript: (role: 'You' | 'Vargos' | 'Progress', text: string) => void;
   level: (value: number) => void;
@@ -166,7 +167,9 @@ export class VoiceClient {
 
   private event(event: Record<string, unknown>): void {
     const type = event.type;
-    if (type === 'session.created') {
+    if (type === 'voice.session' && typeof event.sessionKey === 'string') {
+      this.callbacks.session?.(event.sessionKey);
+    } else if (type === 'session.created') {
       const session = event.session as { audio?: { output?: { format?: { rate?: number } } } };
       this.outputRate = session?.audio?.output?.format?.rate || 16000;
     } else if (type === 'session.updated') {
