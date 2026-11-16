@@ -38,8 +38,9 @@ export {
   PackageSourceSchema,
   PiAgentSettingsSchema,
   AgentConfigSchema,
+  VoiceSettingsSchema,
 } from './agent.js';
-export type { PiAgentSettings, AgentConfig } from './agent.js';
+export type { PiAgentSettings, AgentConfig, VoiceSettings } from './agent.js';
 
 // Features
 export { LinkExpandConfigSchema } from './features.js';

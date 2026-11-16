@@ -93,7 +93,31 @@ export type PiAgentSettings = z.infer<typeof PiAgentSettingsSchema>;
 
 // ─── Vargos Agent Config ───────────────────────────────────────────────────────
 
+/** Speech pipeline settings stored alongside agent settings, never API keys. */
+export const VoiceSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  stt: z.object({
+    baseUrl: z.url(),
+    model: z.string().min(1),
+    language: z.string().default('English'),
+  }).strict(),
+  tts: z.object({
+    baseUrl: z.url(),
+    model: z.string().min(1),
+    voice: z.string().default('jarvis'),
+    referenceAudio: z.string().default('agent/voice-templates/jarvis.wav')
+      .describe('Absolute path, or path relative to the Vargos data directory.'),
+    referenceText: z.string().min(1),
+    language: z.string().default('English'),
+  }).strict(),
+}).strict();
+
+export type VoiceSettings = z.infer<typeof VoiceSettingsSchema>;
+
 export const AgentConfigSchema = PiAgentSettingsSchema.extend({
+  voice: VoiceSettingsSchema.optional(),
   executionTimeoutMs: z.number().int().positive().optional().default(300 * 60 * 1000).describe('Max execution time for agent tasks in milliseconds. Default is 5 hours (300 minutes).'),
   media: z.object({
     audio: z.string().optional(),

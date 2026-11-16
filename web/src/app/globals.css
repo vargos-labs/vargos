@@ -453,3 +453,48 @@
     transform: none;
   }
 }
+
+/* Voice assistant — colors follow the console's existing HUD theme. */
+.voice-orb-stage {
+  position: relative;
+  width: min(78vw, 340px);
+  aspect-ratio: 1;
+  color: var(--primary);
+  opacity: .6;
+  transition: opacity .5s;
+}
+.voice-orb-stage.is-active { opacity: 1; }
+.voice-orb-halo {
+  position: absolute;
+  inset: -15%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in oklch, var(--primary) 16%, transparent), transparent 65%);
+  transform: scale(calc(1 + var(--voice-level) * .2));
+  transition: transform .15s;
+}
+.voice-orb-orbit { position: absolute; inset: 0; width: 100%; height: 100%; animation: voice-orbit 50s linear infinite; }
+.voice-orb-body {
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 25%, color-mix(in oklch, var(--primary) 9%, var(--background)), var(--background) 85%);
+  box-shadow: 0 0 35px color-mix(in oklch, var(--primary) 14%, transparent), inset -10px -15px 35px color-mix(in oklch, var(--primary) 8%, transparent);
+  transform: scale(calc(1 + var(--voice-level) * .08));
+  transition: transform .12s;
+}
+.voice-orb-grid { transform-origin: 140px 140px; animation: voice-grid 18s ease-in-out infinite alternate; }
+.voice-orb-core { transform-origin: 140px 140px; animation: voice-breathe 4s ease-in-out infinite; }
+.is-working .voice-orb-orbit { animation-duration: 9s; }
+.is-working .voice-orb-core { animation-duration: 1.3s; }
+.voice-orb-cross { position: absolute; top: 50%; width: 14px; height: 1px; background: currentColor; opacity: .4; }
+.voice-orb-cross-left { left: -8%; }
+.voice-orb-cross-right { right: -8%; }
+.is-paused .voice-orb-orbit, .is-paused .voice-orb-grid, .is-paused .voice-orb-core { animation-play-state: paused; }
+.is-paused { opacity: .4; }
+@keyframes voice-orbit { to { transform: rotate(360deg); } }
+@keyframes voice-grid { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+@keyframes voice-breathe { 0%, 100% { opacity: .45; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb-orbit, .voice-orb-grid, .voice-orb-core { animation: none; }
+  .voice-orb-body, .voice-orb-halo { transition: none; }
+}

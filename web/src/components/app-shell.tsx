@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Gauge,
+  Mic,
   Globe,
   MessagesSquare,
   Radio,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: Gauge },
+  { href: "/voice", label: "Voice", icon: Mic },
   { href: "/sessions", label: "Sessions", icon: MessagesSquare },
   { href: "/channels", label: "Channels", icon: Radio },
   { href: "/cron", label: "Cron", icon: Timer },

@@ -2,6 +2,19 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.4.6] - 2026-11-16
+
+### Added
+- Voice console with live transcripts, tool and skill activity, microphone controls, and speech interruption.
+- Shared voice agent profile using existing instructions, bus tools, and SDK skill discovery.
+- Optional voice configuration in agent settings and a bundled Jarvis reference recording.
+
+### Fixed
+- Voice tool calls acknowledge dispatch immediately so conversation can continue while tools run; results and agent progress arrive as updates.
+- Voice-dispatched agents default to low reasoning effort while preserving explicit overrides.
+
+[3.4.6]: https://github.com/vargos-labs/vargos/releases/tag/v3.4.6
+
 ## [3.4.5] - 2026-11-16
 
 ### Added

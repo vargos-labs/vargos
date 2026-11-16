@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import type { AgentProfile } from '../../lib/agent-profile.js';
 import path from 'node:path';
 import type { Bus, Service, Json } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
@@ -160,6 +161,26 @@ export class AgentService implements Service {
       schema: z.object({ sessionKey: z.string(), content: z.string() }),
       internal: true,
     }, (p) => this.appendMessage(p));
+
+    bus.register('agent.profile', {
+      description: 'Resolve shared agent instructions, skills, and bus tool definitions for a runtime and optional persona.',
+      internal: true,
+      schema: z.object({
+        sessionKey: z.string().min(1),
+        persona: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
+      }),
+    }, async (p): Promise<AgentProfile> => {
+      const persona = p.persona ? await loadChannelPersona(p.persona) : await this.loadPersonaIfChannel(p.sessionKey);
+      const tools = await this.getCustomTools(p.sessionKey, persona?.meta.allowedTools);
+      const systemPrompt = await this.getSystemPrompt(p.sessionKey, persona?.body);
+      const resources = await this.createResourceLoader(systemPrompt, undefined, p.sessionKey);
+      return {
+        systemPrompt: [resources.getSystemPrompt(), ...resources.getAppendSystemPrompt()].filter(Boolean).join('\n\n'),
+        tools: tools.map(tool => ({ name: tool.name, method: tool.label, description: tool.description, parameters: tool.parameters })),
+        skills: resources.getSkills().skills.filter(skill => !skill.disableModelInvocation)
+          .map(({ name, description, filePath }) => ({ name, description, filePath })),
+      };
+    });
 
     bus.register('agent.status', {
       description: 'Return the agent session inventory (state, parent links, model). Pass sessionKey to scope to one session and its subagents.',

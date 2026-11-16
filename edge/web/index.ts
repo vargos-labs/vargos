@@ -24,6 +24,7 @@ import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
 import { getDataPaths } from '../../lib/paths.js';
+import { connectVoice } from './voice.js';
 
 const log = createLogger('edge-web');
 
@@ -57,6 +58,7 @@ export class WebEdge implements Service {
   private watcher: fs.FSWatcher | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
   private debounce = new Map<string, NodeJS.Timeout>();
+  private voiceClients = new WeakSet<WebSocket>();
   private lastStatusJson = '';
   private lastStatus: unknown = null;
 
@@ -89,6 +91,7 @@ export class WebEdge implements Service {
     this.debounce.clear();
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.watcher?.close();
+    for (const client of this.wss?.clients ?? []) client.terminate();
     this.wss?.close();
     await this.killChild();
   }
@@ -165,7 +168,17 @@ export class WebEdge implements Service {
     wss.on('error', (err: NodeJS.ErrnoException) =>
       log.error(`ws server error: ${err.code === 'EADDRINUSE' ? `port ${WS_PORT} in use` : err.message}`));
 
-    wss.on('connection', (ws: WebSocket) => {
+    wss.on('connection', (ws: WebSocket, request) => {
+      if (new URL(request.url || '/', 'http://localhost').searchParams.get('voice') === '1') {
+        try {
+          const origin = new URL(request.headers.origin || '');
+          const host = new URL(`http://${request.headers.host}`).hostname;
+          if (origin.hostname !== host) { ws.close(1008, 'Origin not allowed'); return; }
+        } catch { ws.close(1008, 'Origin required'); return; }
+        this.voiceClients.add(ws);
+        connectVoice(ws, this.bus);
+        return;
+      }
       const { dataDir } = getDataPaths();
       ws.send(JSON.stringify({ type: 'hello', wsPort: WS_PORT, dataDir } satisfies WsEvent));
       if (this.lastStatus) {
@@ -201,7 +214,7 @@ export class WebEdge implements Service {
   private broadcast(event: WsEvent): void {
     const msg = JSON.stringify(event);
     for (const c of this.wss?.clients ?? []) {
-      if (c.readyState === WebSocket.OPEN) c.send(msg);
+      if (!this.voiceClients.has(c) && c.readyState === WebSocket.OPEN) c.send(msg);
     }
   }
 
