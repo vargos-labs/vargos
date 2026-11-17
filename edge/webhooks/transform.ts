@@ -1,9 +1,9 @@
 import path from 'node:path';
+import type { AgentOptions } from '../../services/config/schemas/agent.js';
 
-type WebhookTransformObjectReturnType = {
+type WebhookTransformObjectReturnType = AgentOptions & {
   task: string;
   cwd?: string;
-  model?: string;
 }
 
 export type TransformFn = (payload: unknown) => WebhookTransformObjectReturnType | string | null | undefined;

@@ -1,3 +1,4 @@
+import type { AgentOptions } from '../../config/schemas/agent.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
@@ -56,7 +57,7 @@ class TestableRuntime extends AgentService {
     this.lastCreateOptions = options;
     return Promise.resolve({ session: this.fakeForCreate } as unknown as CreateAgentSessionResult);
   }
-  testGetOrCreate(key: string, opts?: { cwd?: string; model?: string }) {
+  testGetOrCreate(key: string, opts?: AgentOptions & { cwd?: string }) {
     return this.getOrCreateSession(key, opts);
   }
   inject(key: string, session: AgentSession) {
@@ -65,7 +66,7 @@ class TestableRuntime extends AgentService {
   }
 }
 
-async function createRuntime(dataDir: string): Promise<TestableRuntime> {
+async function createRuntime(dataDir: string, toolNames: string[] = []): Promise<TestableRuntime> {
   const config = AppConfigSchema.parse({
     providers: { test: { baseUrl: 'http://localhost:1234', apiKey: 'test-key', api: 'openai-completions', models: [{ id: 'model-a', name: 'Model A' }] } },
     agent: { model: 'test:model-a' },
@@ -80,7 +81,7 @@ async function createRuntime(dataDir: string): Promise<TestableRuntime> {
     on: () => () => {},
     emit: () => {},
     has: () => false,
-    list: () => [],
+    list: () => toolNames.map(name => ({ name, description: name, schema: {}, internal: false, live: false })),
   } as unknown as Bus;
 
   const runtime = new TestableRuntime();
@@ -114,6 +115,37 @@ describe('agent model override', () => {
     runtime.fakeForCreate = fakeSession({ provider: 'test', id: 'model-b' });
     await runtime.testGetOrCreate('telegram:u1', { model: 'test:model-b' });
     expect(runtime.lastCreateOptions?.model).toMatchObject({ provider: 'test', id: 'model-b' });
+  });
+
+  it('keeps resource selections on reuse and rejects silent changes', async () => {
+    const runtime = await createRuntime(tmpDir);
+    await runtime.testGetOrCreate('cron:test', { skills: ['research'], allowedTools: ['memory.*'] });
+    await expect(runtime.testGetOrCreate('cron:test')).resolves.toBe(runtime.fakeForCreate);
+    await expect(runtime.testGetOrCreate('cron:test', { skills: ['other'] })).rejects.toThrow('new agent session');
+    await expect(runtime.testGetOrCreate('cron:test', { allowedTools: ['web.*'] })).rejects.toThrow('new agent session');
+  });
+
+  it('compares resource selections without order or duplicate sensitivity', async () => {
+    const runtime = await createRuntime(tmpDir);
+    await runtime.testGetOrCreate('cron:test', { skills: ['research', 'writing'], allowedTools: ['memory.*', 'web.*'] });
+    await expect(runtime.testGetOrCreate('cron:test', { skills: ['writing', 'research', 'research'], allowedTools: ['web.*', 'memory.*'] })).resolves.toBe(runtime.fakeForCreate);
+  });
+
+  it('narrows subagent tools and discovered skills without widening persona restrictions', async () => {
+    mkdirSync(path.join(tmpDir, 'agents'), { recursive: true });
+    writeFileSync(path.join(tmpDir, 'agents/subagent.md'), '---\nallowedTools: [memory.*]\nskills: [research]\n---\nFocused worker');
+    for (const name of ['research', 'writing']) {
+      const directory = path.join(tmpDir, 'agent/skills', name);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} skill\n---\nInstructions`);
+    }
+    const runtime = await createRuntime(tmpDir, ['memory.search', 'channel.send', 'agent.execute']);
+    await runtime.testGetOrCreate('cli:adhoc:subagent:one', { allowedTools: ['*'], skills: ['*'] });
+    expect(runtime.lastCreateOptions?.customTools?.map(tool => tool.label)).toEqual(['memory.search']);
+    expect(runtime.lastCreateOptions?.resourceLoader?.getSkills().skills.map(skill => skill.name)).toEqual(['research']);
+    await runtime.testGetOrCreate('cli:adhoc:subagent:two', { allowedTools: ['channel.send'], skills: ['writing'] });
+    expect(runtime.lastCreateOptions?.customTools).toEqual([]);
+    expect(runtime.lastCreateOptions?.resourceLoader?.getSkills().skills).toEqual([]);
   });
 
   it('switches the model on a cached session', async () => {

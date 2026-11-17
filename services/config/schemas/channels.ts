@@ -3,11 +3,11 @@
  */
 
 import { z } from 'zod';
+import { AgentOptionsSchema } from './agent.js';
 
-const ChannelBaseSchema = z.object({
+const ChannelBaseSchema = AgentOptionsSchema.extend({
   id:                z.string(),
   enabled:           z.boolean().default(true),
-  model:             z.string().optional(),                  // overrides agent.model for runs from this channel
   debounceMs:        z.number().int().min(0).optional(),
   allowFrom:         z.array(z.string()).optional(),
   sentryMode:        z.boolean().optional().default(false), // retain messages that do not trigger execution

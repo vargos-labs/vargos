@@ -8,6 +8,22 @@
 import { z } from 'zod';
 import { ThinkingLevelSchema } from './primitives.js';
 
+/** Optional per-agent overrides shared by personas and execution triggers. */
+export const AgentOptionsSchema = z.object({
+  model: z.string().optional().describe('Model override as provider:modelId; omit to keep the current default.'),
+  reasoningEffort: ThinkingLevelSchema.optional().describe('Reasoning effort; omit to keep the current setting.'),
+  allowedTools: z.array(z.string()).optional().describe('Bus-tool glob whitelist narrowing persona/default tools. Empty or omitted adds no restriction. Built-in Pi tools are unaffected.'),
+  skills: z.array(z.string()).optional().describe('Discovered skill-name glob whitelist narrowing persona/default skill discovery. Empty or omitted adds no restriction.'),
+});
+export type AgentOptions = z.infer<typeof AgentOptionsSchema>;
+
+export const AgentExecuteSchema = AgentOptionsSchema.extend({
+  task: z.string().describe('The task to execute or question to answer.'),
+  taskName: z.string().trim().min(1).max(160).optional().describe('MCP conversation name; reused names continue a conversation, omitted names use a timestamp.'),
+  cwd: z.string().optional().describe('Working directory; defaults to the workspace.'),
+}).passthrough();
+export type AgentExecuteParams = z.infer<typeof AgentExecuteSchema> & { sessionKey?: string };
+
 // ─── PiAgent Settings Schemas ──────────────────────────────────────────────────
 
 export const CompactionSettingsSchema = z.object({

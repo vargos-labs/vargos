@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
 import { AgentService } from '../index.js';
+import { AppConfigSchema } from '../../config/index.js';
 import { EmitterBus } from '../../../core/bus.js';
 import { resetDataPaths } from '../../../lib/paths.js';
 import { SettingsManager } from '@earendil-works/pi-coding-agent';
@@ -14,6 +15,7 @@ class ProfileRuntime extends AgentService {
   constructor(bus: EmitterBus) {
     super();
     this.bus = bus;
+    this.config = AppConfigSchema.parse({});
     this.agentDir = getDataPaths().agentDir;
     this.settings = SettingsManager.create(getDataPaths().workspaceDir, this.agentDir);
     this['registerMethods'](bus);
@@ -67,7 +69,20 @@ describe('agent.profile', () => {
     writeFileSync(path.join(directory, 'agents/voice.md'), '---\nallowedTools: [memory.*]\n---\nMy custom voice instructions.');
     const profile = await bus.call<AgentProfile>('agent.profile', { sessionKey: 'web:voice:test', persona: 'voice' });
     expect(profile.tools.map(tool => tool.method)).toEqual(['memory.search']);
+    expect(profile.options?.allowedTools).toEqual(['memory.*']);
     expect(profile.systemPrompt).toContain('My custom voice instructions.');
+  });
+  it('filters discovered skills through the existing resource loader', async () => {
+    writeFileSync(path.join(directory, 'agents/voice.md'), '---\nskills: [other-*]\n---\n');
+    const profile = await bus.call<AgentProfile>('agent.profile', { sessionKey: 'web:voice:test', persona: 'voice' });
+    expect(profile.skills).toEqual([]);
+    writeFileSync(path.join(directory, 'agents/voice.md'), '---\nskills: []\n---\n');
+    const inherited = await bus.call<AgentProfile>('agent.profile', { sessionKey: 'web:voice:test', persona: 'voice' });
+    expect(inherited.skills.map(skill => skill.name)).toContain('research');
+  });
+  it('validates persona metadata instead of casting malformed values', async () => {
+    writeFileSync(path.join(directory, 'agents/voice.md'), '---\nreasoningEffort: invalid\n---\n');
+    await expect(bus.call('agent.profile', { sessionKey: 'web:voice:test', persona: 'voice' })).rejects.toThrow();
   });
   it('rejects persona paths outside the agents directory', async () => {
     await expect(bus.call('agent.profile', { sessionKey: 'web:voice:test', persona: '../secret' })).rejects.toThrow();

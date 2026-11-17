@@ -57,3 +57,6 @@ export type { StorageConfig } from './storage.js';
 // Memory
 export { MemoryConfigSchema, resolveMemoryConfig } from './memory.js';
 export type { MemoryConfig } from './memory.js';
+
+export { VoiceRuntimeSchema } from './voice.js';
+export type { VoiceRuntimeConfig } from './voice.js';

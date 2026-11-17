@@ -8,14 +8,17 @@ type SpatialReactorProps = {
   outputLevel: number;
   active: boolean;
   paused: boolean;
-  contextPercent?: number;
+  quiet?: boolean;
+  focused?: boolean;
+  muted?: boolean;
+  status?: string;
 };
 
 const TAU = Math.PI * 2;
 const clamp = (value: number) =>
   Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 
-/** A decorative instrument: speech amplitude is measured; context is drawn only when supplied. */
+/** Speech amplitude drives the globe; the surrounding orbits are decorative. */
 export function SpatialReactor(props: SpatialReactorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latest = useRef(props);
@@ -36,37 +39,34 @@ export function SpatialReactor(props: SpatialReactorProps) {
     let size = 0;
     let ratio = 1;
     let amplitude = 0;
-
-    function circle(
-      radius: number,
-      color: string,
-      width = 1,
-      start = 0,
-      end = TAU,
-    ) {
-      ctx!.beginPath();
-      ctx!.arc(0, 0, radius, start, end);
-      ctx!.strokeStyle = color;
-      ctx!.lineWidth = width;
-      ctx!.stroke();
-    }
+    let orbitTilt = 0.48;
 
     function draw(delta: number) {
-      const { active, paused, inputLevel, outputLevel, contextPercent } =
-        latest.current;
+      const {
+        active,
+        paused,
+        inputLevel,
+        outputLevel,
+        quiet,
+        focused,
+        muted,
+        status,
+      } = latest.current;
+      const still = reduced || quiet;
+      const processing = status === "Thinking" || status === "Connecting";
       const target =
         active && !paused ? Math.max(clamp(inputLevel), clamp(outputLevel)) : 0;
-      amplitude = reduced
+      amplitude = still
         ? target
         : amplitude + (target - amplitude) * Math.min(1, delta / 100);
-      if (!reduced) elapsed += delta / 1000;
+      if (!still) elapsed += delta / 1000;
       const t = elapsed;
       const r = size * 0.36;
       const speaking = outputLevel > inputLevel && target > 0.025;
       ctx!.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx!.clearRect(0, 0, size, size);
       ctx!.translate(size / 2, size / 2);
-      ctx!.globalAlpha = paused ? 0.55 : 1;
+      ctx!.globalAlpha = paused || muted ? 0.45 : active ? 1 : 0.65;
 
       const halo = ctx!.createRadialGradient(0, 0, r * 0.1, 0, 0, r * 1.35);
       halo.addColorStop(0, `rgba(109,228,255,${0.1 + amplitude * 0.15})`);
@@ -75,55 +75,86 @@ export function SpatialReactor(props: SpatialReactorProps) {
       ctx!.fillStyle = halo;
       ctx!.fillRect(-size / 2, -size / 2, size, size);
 
-      // Fixed divisions make the moving layers legible against the instrument.
-      for (let i = 0; i < 120; i++) {
-        const a = (i / 120) * TAU;
-        const major = i % 10 === 0;
+      // Project a tilted orbit into screen space. Draw its far half before the
+      // membrane and its near half after, so depth has a stable visual reference.
+      const turn = t * 0.18;
+      // Restore the reactor rim as a stable frame around the dimensional orbits.
+      // These evenly spaced marks are a bezel, not a context usage gauge.
+      for (let i = 0; i < 60; i++) {
+        const a = (i / 60) * TAU;
+        const major = i % 5 === 0;
         ctx!.beginPath();
-        ctx!.moveTo(Math.cos(a) * r * 1.18, Math.sin(a) * r * 1.18);
+        ctx!.moveTo(Math.cos(a) * r * 1.28, Math.sin(a) * r * 1.28);
         ctx!.lineTo(
-          Math.cos(a) * r * (major ? 1.23 : 1.2),
-          Math.sin(a) * r * (major ? 1.23 : 1.2),
+          Math.cos(a) * r * (major ? 1.34 : 1.31),
+          Math.sin(a) * r * (major ? 1.34 : 1.31),
         );
         ctx!.strokeStyle = major
           ? "rgba(169,232,255,.6)"
-          : "rgba(95,182,220,.2)";
-        ctx!.lineWidth = major ? 1 : 0.6;
+          : "rgba(95,182,220,.26)";
+        ctx!.lineWidth = 1;
         ctx!.stroke();
       }
-      circle(r * 1.12, "rgba(120,210,250,.14)");
-      circle(r * 1.04, "rgba(129,219,255,.2)");
-      const turn = reduced ? 0 : t * 0.065;
       for (let i = 0; i < 3; i++) {
-        const a = (i * TAU) / 3 + turn;
-        circle(r * 1.07, "rgba(152,229,255,.7)", 1.6, a, a + 0.65);
-        circle(r * 0.95, "rgba(63,186,246,.28)", 4, -a, -a + 1.1);
+        const start = (i / 3) * TAU + turn;
+        ctx!.beginPath();
+        ctx!.arc(0, 0, r * 0.91, start, start + 0.55);
+        ctx!.strokeStyle = "rgba(152,229,255,.6)";
+        ctx!.lineWidth = 1.5;
+        ctx!.stroke();
       }
-      circle(r * 0.91, "rgba(114,214,251,.17)", 0.8);
-      circle(
-        r * 1.12,
-        "rgba(255,184,86,.85)",
-        2,
-        -Math.PI * 0.13,
-        Math.PI * 0.025,
+      function orbit(
+        front: boolean,
+        tilt: number,
+        rotation: number,
+        radius: number,
+      ) {
+        const count = 160;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * TAU;
+          if (Math.sin(a) >= 0 !== front) continue;
+          ctx!.save();
+          ctx!.rotate(rotation);
+          ctx!.beginPath();
+          ctx!.ellipse(
+            0,
+            0,
+            radius,
+            radius * tilt,
+            0,
+            a,
+            a + TAU / count + 0.002,
+          );
+          ctx!.strokeStyle = `rgba(112,205,241,${front ? 0.6 : 0.2})`;
+          ctx!.lineWidth = 1.4;
+          ctx!.stroke();
+          ctx!.restore();
+        }
+      }
+      orbitTilt +=
+        ((focused ? 0.86 : 0.48) - orbitTilt) *
+        (still ? 1 : Math.min(1, delta / 180));
+      const tilt = orbitTilt;
+      orbit(false, tilt, -0.35, r * 1.22);
+      orbit(false, tilt - 0.16, 0.95, r * 1.08);
+      const membrane = ctx!.createRadialGradient(
+        -r * 0.22,
+        -r * 0.3,
+        0,
+        0,
+        0,
+        r * 0.76,
       );
-
-      // A finite context arc represents actual supplied usage, never a decorative percentage.
-      if (contextPercent !== undefined && Number.isFinite(contextPercent)) {
-        circle(r * 1.29, "rgba(134,208,238,.1)", 2);
-        const usage = clamp(contextPercent / 100);
-        circle(
-          r * 1.29,
-          usage > 0.85 ? "#ffc27d" : "#9beaff",
-          2,
-          -Math.PI / 2,
-          -Math.PI / 2 + usage * TAU,
-        );
-      }
-
-      // Rotating spherical points: rear points are dimmer, front points emit measured audio.
+      membrane.addColorStop(0, "rgba(99,202,239,.08)");
+      membrane.addColorStop(0.72, "rgba(12,58,85,.12)");
+      membrane.addColorStop(1, "rgba(6,26,43,.24)");
+      ctx!.fillStyle = membrane;
+      ctx!.beginPath();
+      ctx!.arc(0, 0, r * 0.76, 0, TAU);
+      ctx!.fill();
+      // Fixed transparent globe: perspective separates the visible front and rear surfaces.
       const globe = r * (0.72 + amplitude * 0.09);
-      const rotation = reduced ? 0.3 : t * 0.12;
+      const rotation = 0.3;
       const points: Array<{
         x: number;
         y: number;
@@ -143,11 +174,13 @@ export function SpatialReactor(props: SpatialReactorProps) {
       points.sort((a, b) => a.z - b.z);
       for (const p of points) {
         const depth = (p.z + 1) / 2;
-        const wave = reduced
+        const wave = still
           ? 0
-          : Math.sin(p.latitude * 5 - t * 3) * amplitude * 0.035;
-        const scale = globe * (1 + wave);
-        const alpha = 0.08 + depth * (0.5 + amplitude * 0.35);
+          : Math.sin(p.latitude * 5 + (speaking ? -1 : 1) * t * 3) *
+            amplitude *
+            0.035;
+        const scale = globe * (1 + wave) * (1 + p.z * 0.08);
+        const alpha = 0.22 + depth * (0.36 + amplitude * 0.35);
         ctx!.fillStyle = `rgba(${speaking ? "195,240,255" : "110,218,255"},${alpha})`;
         ctx!.beginPath();
         ctx!.arc(
@@ -175,6 +208,27 @@ export function SpatialReactor(props: SpatialReactorProps) {
       core.addColorStop(1, "rgba(10,110,215,0)");
       ctx!.fillStyle = core;
       ctx!.fillRect(-globe, -globe, globe * 2, globe * 2);
+      orbit(true, tilt, -0.35, r * 1.22);
+      orbit(true, tilt - 0.16, 0.95, r * 1.08);
+      // Persistent amber accent; processing changes emphasis, never visibility.
+      {
+        ctx!.save();
+        ctx!.rotate(0.95);
+        ctx!.beginPath();
+        ctx!.ellipse(
+          0,
+          0,
+          r * 1.08,
+          r * 1.08 * (tilt - 0.16),
+          0,
+          turn,
+          turn + 0.65,
+        );
+        ctx!.strokeStyle = "#ffc27d";
+        ctx!.lineWidth = processing && !paused ? 3 : 2;
+        ctx!.stroke();
+        ctx!.restore();
+      }
       ctx!.globalAlpha = 1;
     }
 

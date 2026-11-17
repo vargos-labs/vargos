@@ -1,4 +1,8 @@
 ---
+# Optional agent overrides; leave omitted to keep current defaults.
+# model: provider:model-id
+# reasoningEffort: low
+# skills: [skill-name]
 # Glob whitelist of bus tools the subagent can call.
 # agent.execute and channel.send/channel.sendMedia are intentionally excluded:
 #   - No recursive delegation (1-depth max)

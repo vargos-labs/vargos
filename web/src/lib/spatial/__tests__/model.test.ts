@@ -20,6 +20,7 @@ describe("spatial resource projection", () => {
         label: "Restart",
         command: "method",
         method: "channel.restart",
+        params: { id: "one" },
       },
     ];
     expect(
@@ -41,6 +42,9 @@ describe("spatial resource projection", () => {
       )[1].disabledReason,
     ).toBeUndefined();
     expect(actions[1].disabledReason).toBeUndefined();
+    expect(availableActions(actions, [{ name: "channel.restart" }], new Set(["channel.restart"]))[1]).toMatchObject({
+      method: "channel.restart", params: { id: "one" },
+    });
   });
   it("falls back to an inspector for new kinds, including prototype property names", () => {
     expect(definitionFor("new-speech-service").template).toBe("inspector");

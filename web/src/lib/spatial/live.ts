@@ -6,6 +6,7 @@ import type { SpatialResource, Relationship } from "./model";
 export interface LiveResource extends SpatialResource {
   facts?: readonly { label: string; value: string }[];
   transcriptPath?: string;
+  stale?: boolean;
 }
 const empty: LiveResource[] = [];
 
@@ -15,6 +16,7 @@ export function useSpatialResources() {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -60,7 +62,17 @@ export function useSpatialResources() {
               label: "Loaded",
               tone: "neutral",
             },
-            actions: [],
+            actions: [
+              {
+                id: "restart",
+                label: "Restart service",
+                command: "method",
+                method: "bus.restart",
+                params: { service: service.name },
+                confirmation:
+                  "Restart this service? Active work using it may be interrupted.",
+              },
+            ],
           });
           links.push({
             from: "gateway",
@@ -91,7 +103,14 @@ export function useSpatialResources() {
                   : "Unknown",
               },
             ],
-            actions: [],
+            actions: [
+              {
+                id: "reindex",
+                label: "Reindex memory",
+                command: "method",
+                method: "memory.reindex",
+              },
+            ],
           });
       }
       if (channels.status === "fulfilled")
@@ -123,8 +142,22 @@ export function useSpatialResources() {
                     ? "attention"
                     : "neutral",
             },
+            stale: channels.value.live === null,
             facts: [{ label: "Transport", value: channel.type }],
-            actions: [],
+            actions: [
+              {
+                id: "restart",
+                label: "Reconnect channel",
+                command: "method",
+                method: "channel.restart",
+                params: { id: channel.id },
+                disabledReason: !channel.enabled
+                  ? "Channel is disabled"
+                  : undefined,
+                confirmation:
+                  "Reconnect this channel? Messages may be delayed while it restarts.",
+              },
+            ],
           });
         }
       if (mcp.status === "fulfilled")
@@ -158,13 +191,12 @@ export function useSpatialResources() {
       if (sessions.status === "fulfilled")
         for (const file of sessions.value.channels
           .flatMap((group) => group.files)
-          .sort((a, b) => b.mtimeMs - a.mtimeMs)
-          .slice(0, 30)) {
+          .sort((a, b) => b.mtimeMs - a.mtimeMs)) {
           const id = `session:${file.path}`;
           objects.push({
             id,
             kind: "session",
-            title: file.channel,
+            title: `${file.channel} · ${new Date(file.mtimeMs).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`,
             summary: `${file.messageCount} entries · ${new Date(file.mtimeMs).toLocaleDateString()}`,
             status: {
               dimension: "session",
@@ -197,15 +229,50 @@ export function useSpatialResources() {
               inverseLabel: "conversation on",
             });
         }
-      setResources(objects);
-      setRelationships(links);
+      // Failed sources retain their last known projection, never masquerade as deletion.
+      const failedSource = (id: string) =>
+        id.startsWith("channel:")
+          ? channels.status === "rejected"
+          : id.startsWith("mcp:")
+            ? mcp.status === "rejected"
+            : id.startsWith("session:")
+              ? sessions.status === "rejected"
+              : id.startsWith("service:")
+                ? status.status === "rejected" || status.value.services === null
+                : id === "memory"
+                  ? status.status === "rejected" || status.value.memory === null
+                  : status.status === "rejected";
+      setResources((previous) => [
+        ...objects,
+        ...previous
+          .filter((r) => failedSource(r.id))
+          .map((r) => ({ ...r, stale: true })),
+      ]);
+      setRelationships((previous) => [
+        ...links,
+        ...previous.filter(
+          (link) =>
+            (failedSource(link.from) || failedSource(link.to)) &&
+            !links.some(
+              (next) => next.from === link.from && next.to === link.to,
+            ),
+        ),
+      ]);
       setUpdatedAt(new Date().toLocaleTimeString());
-      const failed = [status, channels, mcp, sessions].filter(
-        (item) => item.status === "rejected",
-      ).length;
+      const failed =
+        [status, channels, mcp, sessions].filter(
+          (item) => item.status === "rejected",
+        ).length +
+        (status.status === "fulfilled" &&
+        (!status.value.services || !status.value.memory)
+          ? 1
+          : 0) +
+        (channels.status === "fulfilled" && channels.value.live === null
+          ? 1
+          : 0);
       setError(
         failed
-          ? `${failed} data source${failed > 1 ? "s are" : " is"} unavailable. Showing the sources that responded.`
+          ? `${failed} data source${failed > 1 ? "s are" : " is"} unavailable. Last known objects are retained; retry to update them.`
           : "",
       );
       timer = setTimeout(refresh, 10000);
@@ -215,6 +282,12 @@ export function useSpatialResources() {
       disposed = true;
       clearTimeout(timer);
     };
-  }, []);
-  return { resources, relationships, error, updatedAt };
+  }, [revision]);
+  return {
+    resources,
+    relationships,
+    error,
+    updatedAt,
+    refresh: () => setRevision((value) => value + 1),
+  };
 }

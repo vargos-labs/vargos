@@ -24,7 +24,7 @@ import type { AppConfig } from '../../services/config/index.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
 import { getDataPaths } from '../../lib/paths.js';
-import { connectVoice } from './voice.js';
+import { connectVoice, closeVoice } from './voice.js';
 
 const log = createLogger('edge-web');
 
@@ -86,6 +86,7 @@ export class WebEdge implements Service {
   }
 
   async dispose(): Promise<void> {
+    closeVoice(this.bus);
     this.childStops = true;
     for (const t of this.debounce.values()) clearTimeout(t);
     this.debounce.clear();
@@ -176,7 +177,11 @@ export class WebEdge implements Service {
           if (origin.hostname !== host) { ws.close(1008, 'Origin not allowed'); return; }
         } catch { ws.close(1008, 'Origin required'); return; }
         this.voiceClients.add(ws);
-        connectVoice(ws, this.bus);
+        void this.bus.call<AppConfig>('config.get', {}).then(({ voice }) => {
+          const host = voice.host === '0.0.0.0' ? '127.0.0.1' : voice.host;
+          const endpoint = voice.externalUrl || `ws://${host}:${voice.port}/v1/realtime`;
+          if (ws.readyState === WebSocket.OPEN) connectVoice(ws, this.bus, endpoint);
+        }).catch(() => ws.close(1011, 'Voice configuration unavailable'));
         return;
       }
       const { dataDir } = getDataPaths();

@@ -40,7 +40,7 @@ export type ResourceAction = {
 } & (
   | { command: "navigate"; resourceId: string; mode?: SurfaceMode }
   // An adapter supplies canonical params and transport; the renderer does not invent them.
-  | { command: "method"; method: string; confirmation?: string }
+  | { command: "method"; method: string; params?: Record<string, unknown>; confirmation?: string }
 );
 export interface SpatialResource {
   id: string;
@@ -132,7 +132,7 @@ export const definitions = {
     template: "instrument",
   },
   "mcp-server": {
-    group: "connections",
+    group: "abilities",
     family: "connection",
     label: "MCP SERVER",
     template: "instrument",

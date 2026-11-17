@@ -1,3 +1,4 @@
+import { AgentExecuteSchema } from '../../config/schemas/agent.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -37,6 +38,18 @@ describe('CronService — Markdown File CRUD', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
+  it('preserves shared agent overrides through disk reload and execution', async () => {
+    await startService();
+    const options = { model: 'test:model', reasoningEffort: 'low' as const, allowedTools: ['memory.*'], skills: ['research'] };
+    const task = await add({ name: 'Overrides', schedule: '0 9 * * *', task: 'Research', ...options }) as { id: string };
+    service.dispose();
+    bus.releaseService('cron');
+    let executed: unknown;
+    bus.register('agent.execute', { description: 'test', schema: AgentExecuteSchema }, async params => { executed = params; return { response: '' }; });
+    await startService();
+    await bus.call('cron.run', { id: task.id });
+    expect(executed).toMatchObject(options);
+  });
   it('loads empty task list when no files exist', async () => {
     await startService();
     expect((await search()).items).toHaveLength(0);

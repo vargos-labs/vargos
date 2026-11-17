@@ -18,6 +18,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { Bus, Service } from '../../core/types.js';
 import type { CronTask, CronAddParams, CronUpdateParams } from '../../services/config/index.js';
+import { AgentOptionsSchema } from '../config/schemas/agent.js';
 import { CronTaskSchema, CronAddSchema, CronUpdateSchema } from '../../services/config/schemas/cron.js';
 import { createLogger } from '../../lib/logger.js';
 import { toMessage } from '../../lib/error.js';
@@ -278,7 +279,7 @@ export class CronService implements Service {
     const result = await this.bus.call<{ response: string }>('agent.execute', {
       sessionKey,
       task: task.task,
-      ...(task.model && { model: task.model }),
+      ...AgentOptionsSchema.parse(task),
     });
 
     if (!result.response) return;
@@ -341,12 +342,12 @@ export class CronService implements Service {
 
           // Build task object
           const task: CronTask = {
+            ...AgentOptionsSchema.parse(parsed.frontmatter),
             id: String(parsed.frontmatter.id ?? ''),
             name: String(parsed.frontmatter.title || parsed.frontmatter.name || parsed.frontmatter.id || ''),
             schedule: String(parsed.frontmatter.schedule ?? ''),
             task: parsed.body || '',
             enabled: parsed.frontmatter.enabled === true,
-            model: parsed.frontmatter.model ? String(parsed.frontmatter.model) : undefined,
             notify: Array.isArray(parsed.frontmatter.notify) ? parsed.frontmatter.notify.map(String) : undefined,
             activeHours: Array.isArray(parsed.frontmatter.activeHours) ? (parsed.frontmatter.activeHours as number[]).slice(0, 2) as [number, number] : undefined,
             activeHoursTimezone: parsed.frontmatter.activeHoursTimezone ? String(parsed.frontmatter.activeHoursTimezone) : undefined,

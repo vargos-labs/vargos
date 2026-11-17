@@ -1,6 +1,6 @@
 {
   "name": "@vargos-labs/vargos",
-  "version": "3.4.6",
+  "version": "3.5.0",
   "packageManager": "pnpm@10.33.2",
   "description": "Self-hosted agent OS with persistent memory, multi-channel presence, tools, scheduling, and sub-agent orchestration",
   "license": "MIT",
@@ -42,7 +42,7 @@
     "npx:local": "node scripts/npx-local.mjs",
     "cli": "tsx cli.ts",
     "chat": "tsx scripts/seed.ts && PI_CODING_AGENT_DIR=\"${VARGOS_DATA_DIR:-$HOME/.vargos}/agent\" pi --session-dir \"${VARGOS_DATA_DIR:-$HOME/.vargos}/sessions/cli\"",
-    "build": "rm -rf dist && tsc && cp -r .templates dist/.templates && chmod +x dist/cli.js && pnpm --filter @vargos-labs/vargos-web build && cp -r web/.next/standalone dist/web && rm -rf dist/web/node_modules dist/web/web/node_modules dist/web/package.json",
+    "build": "rm -rf dist && tsc && cp -r .templates dist/.templates && node scripts/stage-runtime.mjs && chmod +x dist/cli.js && pnpm --filter @vargos-labs/vargos-web build && cp -r web/.next/standalone dist/web && rm -rf dist/web/node_modules dist/web/web/node_modules dist/web/package.json",
     "prepare": "husky",
     "test": "vitest",
     "test:run": "vitest run",

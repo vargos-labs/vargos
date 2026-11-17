@@ -1,4 +1,9 @@
 ---
+# Optional agent overrides; leave omitted to keep current defaults.
+# model: provider:model-id
+# reasoningEffort: low
+# skills: [skill-name]
+# allowedTools: [memory.*]
 id: heartbeat
 name: Heartbeat
 schedule: "*/30 * * * *"

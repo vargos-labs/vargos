@@ -1,4 +1,9 @@
 ---
+# Optional agent overrides; leave omitted to keep current defaults.
+# model: provider:model-id
+# reasoningEffort: low
+# skills: [skill-name]
+# allowedTools: [memory.*]
 id: daily-agent-prompt-refinement
 name: Daily Agent Prompt Refinement
 schedule: "0 22 * * *"

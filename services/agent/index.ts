@@ -13,7 +13,7 @@ import type { AgentProfile } from '../../lib/agent-profile.js';
 import path from 'node:path';
 import type { Bus, Service, Json } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
-import { ThinkingLevelSchema, type ThinkingLevel } from '../config/schemas/primitives.js';
+import { AgentExecuteSchema, type AgentExecuteParams, type AgentOptions } from '../config/schemas/agent.js';
 import { createLogger } from '../../lib/logger.js';
 import { withTimeout } from '../../lib/util.js';
 import { interpolatePrompt } from './prompt-interpolate.js';
@@ -94,6 +94,7 @@ export class AgentService implements Service {
   readonly name = 'agent';
   protected bus!: Bus;
   protected config!: AppConfig;
+  private resourceOptions = new WeakMap<AgentSession, Pick<AgentOptions, 'allowedTools' | 'skills'>>();
   protected sessions = new Map<string, AgentSession>();
   /** sessionKey → epoch ms when the session entered the cache (for agent.status). */
   protected sessionMeta = new Map<string, number>();
@@ -146,13 +147,7 @@ export class AgentService implements Service {
       description: 'Delegate a task or ask a question to the Vargos agent. It can reason, run configured skills, use tools and connected MCP servers, and work in the specified directory. Returns the final answer; MCP callers can request progress updates while it works.',
       // passthrough keeps `sessionKey` (auto-injected by the tool wrapper, supplied by
       // direct callers) alive through validation without advertising it as a tool param.
-      schema: z.object({
-        task: z.string().describe('The task to execute or question to answer.'),
-        taskName: z.string().trim().min(1).max(160).optional().describe('Short task name. MCP uses mcp:agent:<slugified-name> as the conversation key unless sessionKey is supplied. Reuse a name to continue its conversation; omit to use the current timestamp.'),
-        cwd: z.string().optional().describe('Working directory for the agent — defaults to workspace dir.'),
-        reasoningEffort: ThinkingLevelSchema.optional().describe('Optional reasoning effort for this session. Clamped to model capabilities; omit to keep the current setting.'),
-        model: z.string().optional().describe('Optional model override as "provider:modelId" (e.g. "anthropic:claude-opus-4"). Omit to use the agent default.'),
-      }).passthrough(),
+      schema: AgentExecuteSchema,
       cli: { positional: ['task'] },
     }, (p) => this.execute(p));
 
@@ -173,8 +168,12 @@ export class AgentService implements Service {
       const persona = p.persona ? await loadChannelPersona(p.persona) : await this.loadPersonaIfChannel(p.sessionKey);
       const tools = await this.getCustomTools(p.sessionKey, persona?.meta.allowedTools);
       const systemPrompt = await this.getSystemPrompt(p.sessionKey, persona?.body);
-      const resources = await this.createResourceLoader(systemPrompt, undefined, p.sessionKey);
+      const resources = await this.createResourceLoader(systemPrompt, undefined, p.sessionKey, persona?.meta.skills);
+      const voice = p.persona === 'voice' ? this.config.agent?.voice : undefined;
+      const model = voice ? this.modelRegistry.find(voice.provider, voice.model) : undefined;
       return {
+        options: { allowedTools: persona?.meta.allowedTools, skills: persona?.meta.skills },
+        ...(model ? { model: { id: model.id, provider: model.provider, contextWindow: model.contextWindow } } : {}),
         systemPrompt: [resources.getSystemPrompt(), ...resources.getAppendSystemPrompt()].filter(Boolean).join('\n\n'),
         tools: tools.map(tool => ({ name: tool.name, method: tool.label, description: tool.description, parameters: tool.parameters })),
         skills: resources.getSkills().skills.filter(skill => !skill.disableModelInvocation)
@@ -235,7 +234,7 @@ export class AgentService implements Service {
    * the agent calls this as a tool; direct callers (channels, cron, webhooks, RPC)
    * supply it. It survives validation via the schema's .passthrough().
    */
-  private async execute(params: { sessionKey?: string; task: string; taskName?: string; cwd?: string; model?: string; reasoningEffort?: ThinkingLevel }): Promise<{ response: string }> {
+  private async execute(params: AgentExecuteParams): Promise<{ response: string }> {
     // Channels/cron/webhooks and the agent-tool wrapper always supply a sessionKey; a bare
     // `vargos agent execute "<task>"` does not, so default to a shared ad-hoc CLI session.
     const sessionKey = params.sessionKey || 'cli:adhoc';
@@ -252,7 +251,7 @@ export class AgentService implements Service {
 
     const task = interpolatePrompt(params.task, { SESSION_KEY: sessionKey }).trim();
 
-    const session = await this.getOrCreateSession(sessionKey, { cwd: params.cwd, model });
+    const session = await this.getOrCreateSession(sessionKey, { ...params, model });
     if (params.reasoningEffort !== undefined) session.setThinkingLevel(params.reasoningEffort, { persist: false });
 
     const timeoutMs = this.config.agent?.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS;
@@ -348,10 +347,16 @@ export class AgentService implements Service {
    * Uses SessionManager.continueRecent() to load the latest session file,
    * preserving conversation history across restarts.
    */
-  protected async getOrCreateSession(sessionKey: string, options?: { cwd?: string; model?: string }, rotating = false): Promise<AgentSession> {
+  protected async getOrCreateSession(sessionKey: string, options?: AgentOptions & { cwd?: string }, rotating = false): Promise<AgentSession> {
     if (!rotating) await this.rotateSessionIfNeeded(sessionKey);
     const cached = rotating ? undefined : this.sessions.get(sessionKey);
     if (cached) {
+      const previous = this.resourceOptions.get(cached);
+      for (const key of ['allowedTools', 'skills'] as const) {
+        if (options?.[key]?.length && JSON.stringify([...new Set(options[key])].sort()) !== JSON.stringify([...new Set(previous?.[key])].sort())) {
+          throw new Error(`Changing ${key} requires a new agent session.`);
+        }
+      }
       await this.applyModelOverride(cached, sessionKey, options?.model);
       return cached;
     }
@@ -380,14 +385,14 @@ export class AgentService implements Service {
     await fs.mkdir(this.agentDir, { recursive: true });
 
     const persona = await this.loadPersonaIfChannel(sessionKey);
-    const customTools = await this.getCustomTools(sessionKey, persona?.meta.allowedTools);
+    const customTools = await this.getCustomTools(sessionKey, persona?.meta.allowedTools, options?.allowedTools);
     const rawSystemPrompt = await this.getSystemPrompt(sessionKey, persona?.body);
-    const resourceLoader = await this.createResourceLoader(rawSystemPrompt, effectiveCwd, sessionKey);
+    const resourceLoader = await this.createResourceLoader(rawSystemPrompt, effectiveCwd, sessionKey, persona?.meta.skills, options?.skills);
 
     log.debug(`[${sessionKey}] session created tools=${customTools.length} promptChars=${rawSystemPrompt?.length ?? 0}`);
 
     // Apply the per-call/channel model override at creation time, when provided and known.
-    const model = this.resolveModel(options?.model);
+    const model = this.resolveModel(options?.model || persona?.meta.model);
 
     const { session } = await this.createPiSession({
       cwd: effectiveCwd,
@@ -399,6 +404,10 @@ export class AgentService implements Service {
       resourceLoader,
       ...(model && { model }),
     });
+
+    this.resourceOptions.set(session, { allowedTools: options?.allowedTools, skills: options?.skills });
+    const reasoning = persona?.meta.reasoningEffort;
+    if (reasoning !== undefined) session.setThinkingLevel(reasoning, { persist: false });
 
     if (process.env.LOG_LEVEL === 'debug') {
       const debugDir = path.join(sessionDir, '.debug');
@@ -449,6 +458,7 @@ export class AgentService implements Service {
         await fs.mkdir(path.dirname(archive), { recursive: true });
         await fs.copyFile(file, archive);
         fresh = await this.getOrCreateSession(sessionKey, {
+          ...this.resourceOptions.get(old),
           cwd: old.sessionManager.getCwd(), model: `${old.model.provider}:${old.model.id}`,
         }, true);
         fresh.sessionManager.appendMessage({ role: 'user', content: handoff, timestamp: Date.now() });
@@ -657,7 +667,7 @@ export class AgentService implements Service {
    * Create ResourceLoader. PiAgent's DefaultResourceLoader handles skills, themes, and
    * prompt templates. We override systemPrompt with our Vargos bootstrap files.
    */
-  protected async createResourceLoader(systemPromptOverride?: string, cwd?: string, sessionKey?: string): Promise<DefaultResourceLoader> {
+  protected async createResourceLoader(systemPromptOverride?: string, cwd?: string, sessionKey?: string, ...skillPatterns: (string[] | undefined)[]): Promise<DefaultResourceLoader> {
     const paths = getDataPaths();
     const effectiveCwd = cwd ?? paths.workspaceDir;
     // Only workspace + cwd here — Pi SDK already auto-loads <agentDir>/skills and <cwd>/.pi/skills.
@@ -671,12 +681,15 @@ export class AgentService implements Service {
       noExtensions: true,
       additionalSkillPaths: skillPaths,
       noSkills: false,
+      ...(skillPatterns.some(patterns => patterns?.length) && { skillsOverride: (base: ReturnType<DefaultResourceLoader['getSkills']>) => ({
+        ...base, skills: base.skills.filter(skill => skillPatterns.every(patterns => !patterns?.length || patterns.some(pattern => matchesGlob(pattern, skill.name)))),
+      }) }),
       ...(systemPromptOverride && { systemPrompt: systemPromptOverride }),
     });
 
     await resourceLoader.reload();
-    const { skills } = resourceLoader.getSkills();
-    log.debug(`${sessionKey ? `[${sessionKey}] ` : ''}resource loader ready skills=${skills.length}`);
+    const { skills: loadedSkills } = resourceLoader.getSkills();
+    log.debug(`${sessionKey ? `[${sessionKey}] ` : ''}resource loader ready skills=${loadedSkills.length}`);
     return resourceLoader;
   }
 
@@ -760,13 +773,12 @@ export class AgentService implements Service {
    * (from a channel persona), filter the tool list down to names matching at least
    * one glob pattern. Empty/undefined patterns = all tools allowed.
    */
-  protected async getCustomTools(sessionKey: string, allowedPatterns?: string[]): Promise<ToolDefinition[]> {
+  protected async getCustomTools(sessionKey: string, ...allowedPatterns: (string[] | undefined)[]): Promise<ToolDefinition[]> {
     const tools = createCustomTools(sessionKey, this.bus);
-    if (!allowedPatterns?.length) return tools;
     // Match on `label` (original event name with dots, e.g. "memory.search")
     // rather than `name` (sanitized with dashes, e.g. "memory-search"),
     // so that frontmatter patterns like "memory.*" work as expected.
-    return tools.filter(t => allowedPatterns.some(p => matchesGlob(p, t.label)));
+    return tools.filter(t => allowedPatterns.every(patterns => !patterns?.length || patterns.some(p => matchesGlob(p, t.label))));
   }
 
   /**

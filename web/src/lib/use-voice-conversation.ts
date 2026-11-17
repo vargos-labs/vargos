@@ -1,11 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { VoiceActivity } from "@vargos/lib/voice";
-import { VoiceClient } from "./voice-client";
+import type {
+  VoiceActivity,
+  WorkspaceCommand,
+  VoiceModelInfo,
+} from "@vargos/lib/voice";
+import { VoiceClient, type VoiceResponseUsage } from "./voice-client";
 
 /** One existing voice transport, independent of which surface is being inspected. */
-export function useVoiceConversation() {
+export function useVoiceConversation(
+  workspace?: (command: WorkspaceCommand) => unknown,
+) {
+  const workspaceHandler = useRef(workspace);
+  useEffect(() => {
+    workspaceHandler.current = workspace;
+  }, [workspace]);
   const client = useRef<VoiceClient | null>(null);
   const [active, setActive] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -16,6 +26,8 @@ export function useVoiceConversation() {
   const [outputLevel, setOutputLevel] = useState(0);
   const [sessionKey, setSessionKey] = useState("");
   const [seconds, setSeconds] = useState(0);
+  const [model, setModel] = useState<VoiceModelInfo | null>(null);
+  const [usage, setUsage] = useState<VoiceResponseUsage | null>(null);
   const [messages, setMessages] = useState<{ role: string; text: string }[]>(
     [],
   );
@@ -36,9 +48,17 @@ export function useVoiceConversation() {
     setMessages([]);
     setActivities([]);
     setSeconds(0);
+    setUsage(null);
+    setModel(null);
     setSessionKey("");
     const voice = new VoiceClient({
+      workspace: (command) =>
+        workspaceHandler.current?.(command) ?? {
+          error: "Workspace is unavailable.",
+        },
       status: setStatus,
+      usage: setUsage,
+      model: setModel,
       error: setError,
       level: setInputLevel,
       outputLevel: setOutputLevel,
@@ -55,7 +75,7 @@ export function useVoiceConversation() {
         client.current = null;
         setActive(false);
         setPaused(false);
-        setStatus("Conversation ended");
+        setStatus("Disconnected");
       },
     });
     client.current = voice;
@@ -71,6 +91,8 @@ export function useVoiceConversation() {
     outputLevel,
     sessionKey,
     seconds,
+    usage,
+    model,
     messages,
     activities,
     start,

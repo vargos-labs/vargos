@@ -2,6 +2,24 @@
 
 All notable changes to Vargos will be documented in this file.
 
+## [3.5.0] - 2026-11-17
+
+### Added
+- V2 voice workspace with an orbital reactor, movable detail panels, contextual resource actions, and voice-controlled workspace navigation.
+- Packaged Hugging Face speech runtime managed by the Vargos service, with an explicit dependency installer and configuration through the existing RPC gateway.
+
+### Changed
+- Shared model, reasoning, tool, and skill options across agent personas, channels, cron tasks, and webhooks.
+- Voice connections retain their live conversation across browser reconnects and replay running and recent activity.
+- Speech settings remain in agent settings; transport endpoints use the central voice configuration.
+
+### Fixed
+- Delegated tool and skill selections cannot widen persona restrictions.
+- Failed voice initialization releases cached connections; runtime retries clean up orphaned speech processes.
+- Workspace actions reuse resource parameters and shared confirmation dialogs.
+
+[3.5.0]: https://github.com/vargos-labs/vargos/releases/tag/v3.5.0
+
 ## [3.4.6] - 2026-11-16
 
 ### Added

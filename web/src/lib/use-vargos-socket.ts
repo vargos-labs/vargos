@@ -13,13 +13,18 @@ export interface VargosSocket {
 }
 
 // Explicit build-time URL, otherwise connect directly to the daemon's WS port.
-function wsUrl(): string {
+export function wsUrl(sameOrigin = false): string {
   const override = process.env.NEXT_PUBLIC_VARGOS_WS_URL;
-  if (override) return override;
-
-  const url = new URL(window.location.origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.port = process.env.NEXT_PUBLIC_VARGOS_WS_PORT || "9004";
+  const url = new URL(override || window.location.origin);
+  if (!override) {
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.port = process.env.NEXT_PUBLIC_VARGOS_WS_PORT || "9004";
+  }
+  if (sameOrigin && window.location.protocol === "https:") {
+    url.protocol = "wss:";
+    url.host = window.location.host;
+    if (!override) url.pathname = "/ws";
+  }
   return url.toString();
 }
 

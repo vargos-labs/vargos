@@ -1,4 +1,7 @@
 ---
+# Optional agent overrides; leave omitted to keep current defaults.
+# Live speech model/provider are configured in settings.json voice settings.
+# skills: [skill-name]
 # Same bus-tool whitelist as other Vargos personas. Empty = all agent-visible tools.
 allowedTools: []
 ---

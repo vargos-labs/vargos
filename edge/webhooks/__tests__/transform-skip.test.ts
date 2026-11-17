@@ -34,6 +34,12 @@ describe('webhook transform — null/undefined skip', () => {
     delete process.env.VARGOS_DATA_DIR;
   });
 
+  it('forwards shared overrides from a transform', async () => {
+    writeFileSync(path.join(dataDir, 'options.js'), `export default () => ({ task: 'Research', reasoningEffort: 'low', allowedTools: ['memory.*'], skills: ['research'] });`);
+    const calls: Call[] = [];
+    await stubEdge(calls).fireHook({ id: 'options', name: 'x', transform: 'options.js' }, {});
+    expect(calls.find(call => call.method === 'agent.execute')?.params).toMatchObject({ reasoningEffort: 'low', allowedTools: ['memory.*'], skills: ['research'] });
+  });
   it('skips agent.execute and notify delivery when transform returns null', async () => {
     writeFileSync(path.join(dataDir, 'skip-null.js'), 'export default () => null;');
     const calls: Call[] = [];

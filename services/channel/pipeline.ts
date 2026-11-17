@@ -5,6 +5,7 @@
  * lifecycle, and reply delivery when the agent finishes.
  */
 
+import { AgentOptionsSchema } from '../config/schemas/agent.js';
 import type { Bus } from '../../core/types.js';
 import type { AppConfig } from '../../services/config/index.js';
 import type { NormalizedInboundMessage, ChannelAdapter } from './types.js';
@@ -74,7 +75,8 @@ export class InboundMessagePipeline {
       log.debug(`no channel entry for: ${target.channel}`);
       return;
     }
-    const { allowFrom, cwd, model } = channelEntry;
+    const { allowFrom, cwd } = channelEntry;
+    const agentOptions = AgentOptionsSchema.parse(channelEntry);
 
     const execute = shouldExecute(allowFrom, message.fromUserId, message.chatType, message.isMentioned);
     if (!execute && channelEntry.sentryMode !== true) return;
@@ -96,7 +98,7 @@ export class InboundMessagePipeline {
     // (its agent.execute can settle early under steering while the real run continues).
     if (this.sessions.has(sessionKey)) {
       log.info(`← ${sessionKey} (steer) "${content.slice(0, 80)}"`);
-      this.bus.call('agent.execute', { sessionKey, task: content, ...(cwd && { cwd }), ...(model && { model }) })
+      this.bus.call('agent.execute', { sessionKey, task: content, ...(cwd && { cwd }), ...agentOptions })
         .catch(err => log.error(`steered agent.execute failed: ${toMessage(err)}`));
       return;
     }
@@ -117,7 +119,7 @@ export class InboundMessagePipeline {
       sessionKey,
       task: content,
       ...(cwd && { cwd }),
-      ...(model && { model }),
+      ...agentOptions,
     }).catch(err => {
       if (session.completed) return;
       const errorMsg = toMessage(err);

@@ -1,6 +1,17 @@
-import type { VoiceActivity } from "@vargos/lib/voice";
+import { wsUrl } from './use-vargos-socket';
+import { workspaceCommandSchema, type WorkspaceCommand } from '@vargos/lib/voice';
+import { voiceModelSchema, type VoiceModelInfo, type VoiceActivity } from "@vargos/lib/voice";
+
+/** Usage of the latest response, not the current context occupancy or a session total. */
+export interface VoiceResponseUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
 
 export interface VoiceCallbacks {
+  workspace?: (command: WorkspaceCommand) => unknown;
+  model?: (model: VoiceModelInfo) => void;
+  usage?: (usage: VoiceResponseUsage | null) => void;
   session?: (sessionKey: string) => void;
   status: (text: string) => void;
   transcript: (role: 'You' | 'Vargos' | 'Progress', text: string) => void;
@@ -42,17 +53,8 @@ export class VoiceClient {
       await this.context.resume();
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (this.stopped) { this.stream.getTracks().forEach(t => t.stop()); return; }
-      const url = new URL(process.env.NEXT_PUBLIC_VARGOS_WS_URL || window.location.origin);
-      if (!process.env.NEXT_PUBLIC_VARGOS_WS_URL) {
-        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        url.port = process.env.NEXT_PUBLIC_VARGOS_WS_PORT || '9004';
-      }
-      // HTTPS voice traffic stays on the console's authenticated origin.
-      if (window.location.protocol === 'https:') {
-        url.protocol = 'wss:';
-        url.host = window.location.host;
-        if (!process.env.NEXT_PUBLIC_VARGOS_WS_URL) url.pathname = '/ws';
-      }
+      // Voice retains its authenticated same-origin HTTPS policy.
+      const url = new URL(wsUrl(true));
       url.searchParams.set('voice', '1');
       const socket = new WebSocket(url);
       this.socket = socket;
@@ -167,8 +169,16 @@ export class VoiceClient {
 
   private event(event: Record<string, unknown>): void {
     const type = event.type;
-    if (type === 'voice.session' && typeof event.sessionKey === 'string') {
+    if (type === 'voice.workspace.command' && typeof event.callId === 'string') {
+      const parsed = workspaceCommandSchema.safeParse(event.command);
+      let result: unknown;
+      try { result = parsed.success && this.callbacks.workspace ? this.callbacks.workspace(parsed.data) : { error: 'Workspace control is unavailable.' }; }
+      catch { result = { error: 'Workspace command could not be applied.' }; }
+      this.send({ type: 'voice.workspace.result', callId: event.callId, result: JSON.stringify(result) });
+    } else if (type === 'voice.session' && typeof event.sessionKey === 'string') {
       this.callbacks.session?.(event.sessionKey);
+      const model = voiceModelSchema.safeParse(event.model);
+      if (model.success) this.callbacks.model?.(model.data);
     } else if (type === 'session.created') {
       const session = event.session as { audio?: { output?: { format?: { rate?: number } } } };
       this.outputRate = session?.audio?.output?.format?.rate || 16000;
@@ -208,7 +218,12 @@ export class VoiceClient {
         if (item.played >= item.total) this.playback.delete(event.item_id);
       }
     } else if (type === 'response.done') {
-      const response = event.response as { status?: string; status_details?: unknown };
+      const response = event.response as { status?: string; status_details?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
+      const input = response?.usage?.input_tokens;
+      const output = response?.usage?.output_tokens;
+      this.callbacks.usage?.(typeof input === 'number' && Number.isFinite(input) && input >= 0 &&
+        typeof output === 'number' && Number.isFinite(output) && output >= 0
+        ? { inputTokens: input, outputTokens: output } : null);
       if (response?.status === 'failed') { this.fail('The voice response failed. Please reconnect.'); return; }
       this.phase = 'Listening';
       this.refreshStatus();

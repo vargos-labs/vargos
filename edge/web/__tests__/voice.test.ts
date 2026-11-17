@@ -4,7 +4,9 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { z } from 'zod';
 import { EmitterBus } from '../../../core/bus.js';
-import { connectVoice } from '../voice.js';
+import { connectVoice, closeVoice } from '../voice.js';
+import type { AgentProfile } from '../../../lib/agent-profile.js';
+import { matchesGlob } from '../../../lib/glob-match.js';
 
 const servers: WebSocketServer[] = [];
 const clients: WebSocket[] = [];
@@ -16,14 +18,15 @@ afterEach(async () => {
   }));
 });
 
-async function setup(handler = vi.fn(async (_params: unknown): Promise<unknown> => ({ response: 'Done' })), autoAcknowledge = true, configure?: (bus: EmitterBus) => void) {
+async function setup(handler = vi.fn(async (_params: unknown): Promise<unknown> => ({ response: 'Done' })), autoAcknowledge = true, configure?: (bus: EmitterBus) => void, options?: AgentProfile['options']) {
   const bus = new EmitterBus();
   bus.register('agent.execute', { description: 'Execute a task', schema: z.object({ task: z.string() }).passthrough() }, handler);
   configure?.(bus);
   bus.register('agent.profile', { description: 'Profile fixture', internal: true, schema: z.object({ sessionKey: z.string(), persona: z.string() }) }, () => ({
     systemPrompt: 'Voice test persona',
+    options,
     skills: [{ name: 'research', description: 'Research a topic', filePath: '/skills/research/SKILL.md' }],
-    tools: bus.list().filter(method => !method.internal).map(method => ({ name: method.name.replace(/\./g, '-'), method: method.name, description: method.description, parameters: method.schema })),
+    tools: bus.list().filter(method => !method.internal && (!options?.allowedTools?.length || options.allowedTools.some(pattern => matchesGlob(pattern, method.name)))).map(method => ({ name: method.name.replace(/\./g, '-'), method: method.name, description: method.description, parameters: method.schema })),
   }));
   const upstream = new WebSocketServer({ port: 0, host: '127.0.0.1' });
   const browser = new WebSocketServer({ port: 0, host: '127.0.0.1' });
@@ -46,7 +49,7 @@ async function setup(handler = vi.fn(async (_params: unknown): Promise<unknown> 
   const events: Record<string, unknown>[] = [];
   client.on('message', data => events.push(JSON.parse(data.toString())));
   await vi.waitFor(() => expect(received.some(e => e.type === 'session.update')).toBe(true));
-  return { bus, client, backend, received, events, handler };
+  return { bus, client, backend, received, events, handler, browser };
 }
 function dispatch(backend: WebSocket, id = 'one') {
   backend.send(JSON.stringify({ type: 'response.created' }));
@@ -58,10 +61,132 @@ function outputEvents(received: Record<string, unknown>[]) {
 }
 
 describe('native voice bridge', () => {
+  it('retries profile loading after a failed initialization', async () => {
+    const { client, browser, received, bus } = await setup();
+    const closed = once(client, 'close');
+    closeVoice(bus);
+    await closed;
+    const call = vi.spyOn(bus, 'call').mockRejectedValueOnce(new Error('Profile unavailable'));
+    const failed = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(failed);
+    await once(failed, 'close');
+    call.mockRestore();
+    const replacement = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(replacement);
+    await vi.waitFor(() => expect(received.filter(event => event.type === 'session.update')).toHaveLength(2));
+  });
+
+  it('recreates the upstream after malformed backend messages', async () => {
+    const { client, backend, browser, received } = await setup();
+    const closed = once(client, 'close');
+    backend.send('invalid-json');
+    await closed;
+    const replacement = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(replacement);
+    await vi.waitFor(() => expect(received.filter(event => event.type === 'session.update')).toHaveLength(2));
+  });
+
+  it('replays running and detached completion activities on reconnect', async () => {
+    let finish!: (value: unknown) => void;
+    const { client, backend, browser, handler } = await setup(vi.fn(() => new Promise(resolve => { finish = resolve; })));
+    dispatch(backend);
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+    client.close();
+    await once(client, 'close');
+    const reconnect = () => {
+      const socket = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+      clients.push(socket);
+      const events: Record<string, unknown>[] = [];
+      socket.on('message', data => events.push(JSON.parse(data.toString())));
+      return { socket, events };
+    };
+    const first = reconnect();
+    await vi.waitFor(() => expect(first.events).toContainEqual(expect.objectContaining({ type: 'voice.activity', activity: expect.objectContaining({ id: 'task:one', state: 'running' }) })));
+    first.socket.close();
+    await once(first.socket, 'close');
+    finish({ response: 'Done' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const second = reconnect();
+    await vi.waitFor(() => expect(second.events).toContainEqual(expect.objectContaining({ type: 'voice.activity', activity: expect.objectContaining({ id: 'task:one', state: 'completed' }) })));
+  });
+
+  it('reattaches to the same upstream conversation and closes it on service disposal', async () => {
+    const { client, backend, browser, received, bus } = await setup();
+    backend.send(JSON.stringify({ type: 'session.updated', session: {} }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    client.close();
+    await once(client, 'close');
+    await vi.waitFor(() => expect(received.some(event => event.type === 'input_audio_buffer.clear')).toBe(true));
+    expect(backend.readyState).toBe(WebSocket.OPEN);
+    const replacement = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(replacement);
+    const events: Record<string, unknown>[] = [];
+    replacement.on('message', data => events.push(JSON.parse(data.toString())));
+    await vi.waitFor(() => expect(events.some(event => event.type === 'session.updated')).toBe(true));
+    expect(events.find(event => event.type === 'voice.session')?.sessionKey).toBe('web:voice:main');
+    expect(received.filter(event => event.type === 'session.update')).toHaveLength(1);
+    const disconnected = once(backend, 'close');
+    closeVoice(bus);
+    await disconnected;
+  });
+
+  it('holds background results while detached and delivers them on reconnect', async () => {
+    let finish!: (value: unknown) => void;
+    const handler = vi.fn(() => new Promise<unknown>(resolve => { finish = resolve; }));
+    const { client, backend, browser, received } = await setup(handler);
+    backend.send(JSON.stringify({ type: 'session.updated', session: {} }));
+    dispatch(backend);
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+    client.close();
+    await once(client, 'close');
+    await vi.waitFor(() => expect(received.some(event => event.type === 'input_audio_buffer.clear')).toBe(true));
+    backend.send(JSON.stringify({ type: 'response.done' }));
+    finish({ response: 'Finished while disconnected' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(JSON.stringify(received)).not.toContain('Finished while disconnected');
+    const replacement = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(replacement);
+    await vi.waitFor(() => expect(JSON.stringify(received)).toContain('Finished while disconnected'));
+  });
+
+  it('rejects a second browser without replacing the active conversation', async () => {
+    const { browser, client, backend } = await setup();
+    const second = new WebSocket(`ws://127.0.0.1:${(browser.address() as AddressInfo).port}`);
+    clients.push(second);
+    const [code] = await once(second, 'close');
+    expect(code).toBe(1008);
+    expect(client.readyState).toBe(WebSocket.OPEN);
+    expect(backend.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('routes workspace commands to the calling browser and waits for its acknowledgement', async () => {
+    const { backend, client, events, received, handler } = await setup();
+    backend.send(JSON.stringify({ type: 'response.created' }));
+    backend.send(JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'workspace-one', name: 'workspace-control', arguments: JSON.stringify({ action: 'open', target: 'runtime' }) }));
+    backend.send(JSON.stringify({ type: 'response.done' }));
+    await vi.waitFor(() => expect(events).toContainEqual({ type: 'voice.workspace.command', callId: 'workspace-one', command: { action: 'open', target: 'runtime' } }));
+    expect(received.some(event => event.type === 'response.create')).toBe(false);
+    client.send(JSON.stringify({ type: 'voice.workspace.result', callId: 'unrelated', result: '{"status":"applied"}' }));
+    client.send(JSON.stringify({ type: 'voice.workspace.result', callId: 'workspace-one', result: '{"status":"applied"}' }));
+    await vi.waitFor(() => expect(received.some(event => event.type === 'response.create')).toBe(true));
+    expect(outputEvents(received).filter(event => event.type === 'function_call_output')).toEqual([{ type: 'function_call_output', call_id: 'workspace-one', output: '{"status":"applied"}' }]);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('rejects workspace actions outside the presentation command schema', async () => {
+    const { backend, events, received, handler } = await setup();
+    backend.send(JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'bad-workspace', name: 'workspace-control', arguments: '{"action":"restart"}' }));
+    await vi.waitFor(() => expect(outputEvents(received).some(event => event.output?.includes('Invalid workspace command'))).toBe(true));
+    expect(events.some(event => event.type === 'voice.workspace.command')).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('uses native VAD and barge-in, passes audio and truncation through, and keeps tool definitions server-owned', async () => {
     const { client, received } = await setup();
     expect(JSON.stringify(received[0])).toContain('/skills/research/SKILL.md');
-    expect(received[0]).toMatchObject({ session: { audio: { input: { turn_detection: { create_response: true, interrupt_response: true } } }, tools: [{ name: 'agent-execute' }] } });
+    expect(JSON.stringify(received[0])).toContain('call workspace-control directly');
+    expect(JSON.stringify(received[0])).toContain('Workspace commands return their result directly');
+    expect(received[0]).toMatchObject({ session: { audio: { input: { turn_detection: { create_response: true, interrupt_response: true } } }, tools: [{ name: 'agent-execute' }, { name: 'workspace-control' }] } });
     client.send(JSON.stringify({ type: 'session.update', session: { tools: [{ name: 'untrusted' }] } }));
     client.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AAAA' }));
     client.send(JSON.stringify({ type: 'conversation.item.truncate', item_id: 'reply', content_index: 0, audio_end_ms: 400 }));
@@ -83,6 +208,26 @@ describe('native voice bridge', () => {
     client.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'WHILE_RUNNING' }));
     await vi.waitFor(() => expect(received).toContainEqual({ type: 'input_audio_buffer.append', audio: 'WHILE_RUNNING' }));
     finish({ response: 'Finished' });
+  });
+
+  it('limits delegated tools and skills to the voice persona even when wildcard overrides are requested', async () => {
+    const { backend, handler } = await setup(undefined, true, bus => {
+      bus.register('memory.search', { description: 'Search', schema: z.object({}) }, () => []);
+      bus.register('memory.delete', { description: 'Delete', schema: z.object({}) }, () => []);
+    }, { allowedTools: ['agent.execute', 'memory.search'], skills: ['research'] });
+    backend.send(JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'restricted', name: 'agent-execute', arguments: JSON.stringify({ task: 'Investigate', allowedTools: ['*'], skills: ['*'] }) }));
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+    expect(handler.mock.calls[0][0]).toMatchObject({ allowedTools: ['agent.execute', 'memory.search'], skills: ['research'] });
+  });
+
+  it('rejects disjoint delegation restrictions instead of restoring unrestricted defaults', async () => {
+    const { backend, handler, received } = await setup(undefined, true, undefined,
+      { allowedTools: ['agent.execute'], skills: ['research'] });
+    for (const [key, selection] of [['allowedTools', 'memory.delete'], ['skills', 'unavailable']]) {
+      backend.send(JSON.stringify({ type: 'response.function_call_arguments.done', call_id: key, name: 'agent-execute', arguments: JSON.stringify({ task: 'Investigate', [key]: [selection] }) }));
+    }
+    await vi.waitFor(() => expect(outputEvents(received).filter(item => item.output?.includes('No permitted'))).toHaveLength(2));
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('preserves an explicit reasoning effort for voice-dispatched agents', async () => {
@@ -176,7 +321,7 @@ describe('native voice bridge', () => {
     await vi.waitFor(() => expect(JSON.stringify(outputEvents(received).filter(item => item.type === 'message'))).toContain('Saved context'));
     expect(JSON.parse(outputEvents(received).find(item => item.type === 'function_call_output')!.output!)).toMatchObject({ status: 'started', tool: 'memory.search' });
     expect(handler).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(events).toContainEqual({ type: 'voice.activity', activity: { id: 'memory', kind: 'tool', label: 'memory.search', state: 'completed' } }));
+    await vi.waitFor(() => expect(events).toContainEqual({ type: 'voice.activity', activity: { id: 'memory', kind: 'tool', label: 'memory.search', method: 'memory.search', state: 'completed' } }));
   });
 
   it('returns direct-tool validation errors without delegating or disconnecting', async () => {

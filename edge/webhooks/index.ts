@@ -9,6 +9,7 @@
  *   → agent.execute → deliver to notify targets
  */
 
+import { AgentOptionsSchema } from '../../services/config/schemas/agent.js';
 import http from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { Bus, Service } from '../../core/types.js';
@@ -200,8 +201,7 @@ export class WebhooksEdge implements Service {
     const sessionKey = webhookSessionKey(hook.id);
 
     let task = '',
-      cwd = '',
-      model = '';
+      cwd = '';
 
     if (typeof transformOutput === 'string') {
       task = transformOutput;
@@ -209,7 +209,6 @@ export class WebhooksEdge implements Service {
     else if (transformOutput && typeof transformOutput === 'object') {
       task = transformOutput.task ?? '';
       cwd = transformOutput.cwd ?? '';
-      model = transformOutput.model ?? '';
     }
 
     // Transform returned null/undefined/empty string → intentional skip (dedup /
@@ -228,7 +227,8 @@ export class WebhooksEdge implements Service {
     const result = await this.bus.call<{ response: string }>('agent.execute', {
       sessionKey, task,
       ...(cwd && { cwd }),
-      ...(model && { model }),
+      ...AgentOptionsSchema.parse(hook),
+      ...(typeof transformOutput === 'object' && transformOutput ? AgentOptionsSchema.parse(transformOutput) : {}),
     });
 
     if (result.response && hook.notify?.length) {

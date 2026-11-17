@@ -142,7 +142,7 @@ export class ChannelService implements Service {
         id: z.string(),
         type: z.string(),
         enabled: z.boolean().optional(),
-        model: z.string().optional(),
+        ...ChannelEntrySchema.options[0].pick({ model: true, reasoningEffort: true, allowedTools: true, skills: true }).shape,
         debounceMs: z.number().int().min(0).optional(),
         allowFrom: z.array(z.string()).optional(),
         sentryMode: ChannelEntrySchema.options[0].shape.sentryMode,

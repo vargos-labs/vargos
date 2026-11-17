@@ -72,6 +72,8 @@ The optional `edge/browser` dashboard setup is documented in `docs/browser-conso
   shape (a duplicated schema drifts and silently drops fields on some surfaces). The web console
   reuses the canonical types from `@vargos/services/config` and writes via JSON-RPC; it never
   copies validation or business logic.
+- **Bus methods require a caller**: register an operation only when another service, app, CLI, or UI actually needs to call it. Private lifecycle, setup, and helper functions stay inside their owning service; `internal: true` is not a reason to register them. Reuse existing methods (for example `config.get` and `agent.execute`) instead of introducing wrappers.
+- **Child runtimes use the same configuration boundary**: Python and other apps obtain resolved configuration through the existing JSON-RPC gateway (`config.get`), not by reading Vargos config/settings/models/auth files themselves. Supply only gateway connection details and necessary runtime paths at launch. Start RPC-dependent children after `bus.onReady`, and handle service reloads when the gateway is already running. Do not duplicate schema defaults or add a transport when an existing one suffices.
 - Cross-service imports are forbidden. Use `bus.call('service.method', params)` instead.
 - Type-only imports from `services/config/` are allowed for type-checking `AppConfig`.
 

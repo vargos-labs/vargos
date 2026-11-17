@@ -5,12 +5,11 @@ import { getDataPaths } from '../../lib/paths.js';
 import { createLogger } from '../../lib/logger.js';
 import { copyFileResilient } from '../../lib/util.js';
 
+import { AgentOptionsSchema, type AgentOptions } from '../config/schemas/agent.js';
+
 const log = createLogger('agent-persona');
 
-export interface PersonaMeta {
-  /** Glob whitelist of customTools the channel agent can call. Empty/missing = all customTools allowed. */
-  allowedTools?: string[];
-}
+export type PersonaMeta = AgentOptions;
 
 export interface Persona {
   meta: PersonaMeta;
@@ -50,13 +49,13 @@ export async function loadChannelPersona(channelId: string): Promise<Persona | n
   }
 
   const body = parsed.body.trim();
-  const hasAllowedTools = Array.isArray(parsed.meta.allowedTools) && parsed.meta.allowedTools.length > 0;
-  if (!body && !hasAllowedTools) {
+  const hasOverrides = Object.values(parsed.meta).some(value => Array.isArray(value) ? value.length > 0 : value != null);
+  if (!body && !hasOverrides) {
     log.warn(`[persona:${channelId}] no overrides file=agents/${channelId}.md; not loaded`);
     return null;
   }
 
-  return { meta: parsed.meta, body };
+  return { meta: AgentOptionsSchema.parse(parsed.meta), body };
 }
 
 /**
@@ -76,7 +75,7 @@ export async function loadSubagentPersona(): Promise<Persona | null> {
 
   const parsed = parseFrontmatter<PersonaMeta>(content);
   if (!parsed) return { meta: {}, body: content.trim() };
-  return { meta: parsed.meta, body: parsed.body.trim() };
+  return { meta: AgentOptionsSchema.parse(parsed.meta), body: parsed.body.trim() };
 }
 
 /**

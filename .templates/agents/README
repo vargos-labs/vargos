@@ -1,5 +1,24 @@
-# VARGOS Note
-Don't name this as an .md file.
+# Agent personas
+Keep this file extensionless so it is not loaded as a persona.
 
-This directory is reserved for appending custom System Prompt per channel based.
-Useful if we want to filter out the output based on different channels.
+Markdown bodies append instructions; optional frontmatter shares the agent execution
+options used by cron, channels, and webhook transforms:
+
+- model: provider:modelId
+- reasoningEffort: the shared Pi thinking level
+- allowedTools: bus-method glob whitelist; built-in Pi tools are unaffected
+- skills: discovered skill-name glob whitelist (not paths or skill execution)
+
+Omit fields to keep existing defaults. Empty tool/skill lists inherit the persona
+or normal discovery. Use commented examples rather than bare YAML keys (null).
+Explicit execution options override persona options. Model/reasoning can change
+on a running session; tool/skill selections apply when the session is created.
+Changing those selections requires a new session; automatic rotation retains them.
+
+Channel personas are seeded from default.md; subagents use subagent.md.
+Cron and webhooks pass their own options without acquiring a channel persona.
+Voice uses voice.md for instructions, bus tools, and available skills. Its live
+speech model remains configured in settings.json voice.provider/voice.model;
+background agent.execute calls use the shared options and default to low reasoning.
+
+Bundled templates are copied only when missing; existing user files are preserved.

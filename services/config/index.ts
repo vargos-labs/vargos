@@ -1,3 +1,4 @@
+import { VoiceRuntimeSchema } from './schemas/voice.js';
 import { z } from 'zod';
 import { readFileSync } from 'node:fs';
 import type { Bus, Service } from '../../core/types.js';
@@ -41,6 +42,7 @@ export const AppConfigSchema = z
   .object({
     providers: ProvidersSchema.optional(),
     agent: AgentConfigSchema.optional(),
+    voice: VoiceRuntimeSchema.prefault({}),
     memory: MemoryConfigSchema.optional(),
     auth: AuthSchema,
     channels: z.array(ChannelEntrySchema).default([]),

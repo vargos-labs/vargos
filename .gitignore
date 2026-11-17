@@ -29,3 +29,7 @@ CLAUDE.md
 
 # Internal tasks and plans
 docs/tasks/
+
+# Optional Python speech runtime
+__pycache__/
+*.pyc

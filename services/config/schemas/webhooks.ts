@@ -3,8 +3,9 @@
  */
 
 import { z } from 'zod';
+import { AgentOptionsSchema } from './agent.js';
 
-export const WebhookEntrySchema = z.object({
+export const WebhookEntrySchema = AgentOptionsSchema.extend({
   id:        z.string(),
   name:      z.string(),
   token:     z.string().optional(),  // unset → auth bypassed for this hook
